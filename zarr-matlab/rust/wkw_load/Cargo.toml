@@ -5,7 +5,6 @@ authors = ["Alessandro Motta <alessandro.motta@brain.mpg.de>"]
 build = "build.rs"
 
 [dependencies]
-wkwrap = { path = "../../../rust" }
 zarrs = "0.22.4"
 wkw_mex = { path = "../wkw_mex" }
 
