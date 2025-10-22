@@ -1,18 +1,4 @@
-*.class
-*.log
-.make
-
-# sbt specific
-.cache
-.history
-.lib/
-dist/*
-target/
-lib_managed/
-src_managed/
-project/boot/
-project/plugins/project/
-.bsp/
+.vscode
 
 # Scala-IDE specific
 .scala_dependencies
@@ -28,5 +14,4 @@ project/plugins/project/
 # Rust specific
 Cargo.lock
 
-# Python specific
-python/.eggs
+matlab-zarr/rust/*/target
