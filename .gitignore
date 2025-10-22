@@ -14,4 +14,4 @@
 # Rust specific
 Cargo.lock
 
-matlab-zarr/rust/*/target
+zarr-matlab/rust/*/target
