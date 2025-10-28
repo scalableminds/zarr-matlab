@@ -1,4 +1,4 @@
-function wkwBuild()
+function zarrBuild()
     % Written by
     %   Benedikt Staffler <benedikt.staffler@brain.mpg.de>
     %   Alessandro Motta <alessandro.motta@brain.mpg.de>
@@ -39,10 +39,14 @@ function buildWithCargo(oldName, newName)
     %system('cargo update');
     
     if ismac
-        % In case the binary is build on arm64 make sure to use x86 as the
-        % target.
-        system('cargo build --release --target=aarch64-apple-darwin');
-        libDir = fullfile(cargoDir, 'target', 'aarch64-apple-darwin', 'release');
+        [~, unameResult] = system('uname -m');
+        if strcmp(strtrim(unameResult),'arm64')
+            system('cargo build --release --target=aarch64-apple-darwin');
+            libDir = fullfile(cargoDir, 'target', 'aarch64-apple-darwin', 'release');
+        else
+            system('cargo build --release --target=x86_64-apple-darwin');
+            libDir = fullfile(cargoDir, 'target', 'x86_64-apple-darwin', 'release');
+        end
     else
         system('cargo build --release');
         libDir = fullfile(cargoDir, 'target', 'release');
