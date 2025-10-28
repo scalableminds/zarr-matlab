@@ -22,7 +22,7 @@ function wkwBuild()
     
     %buildWithCargo('wkw_compress', 'wkwCompress');
     %buildWithCargo('wkw_init', 'wkwInit');
-    buildWithCargo('wkw_load', 'wkwLoadRoi');
+    buildWithCargo('zarr_mex', 'zarrMex');
     %buildWithCargo('wkw_save', 'wkwSaveRoi');
 end
 

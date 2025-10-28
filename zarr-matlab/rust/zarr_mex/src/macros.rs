@@ -31,7 +31,7 @@ macro_rules! mex_function {
     ($_nlhs:ident, $_plhs:ident, $_nrhs:ident, $_prhs:ident, $_body:block) => {
 
 #[no_mangle]
-pub unsafe extern fn mexfilerequiredapiversion(
+pub unsafe extern "C" fn mexfilerequiredapiversion(
     built_by_rel: *mut c_uint,
     target_api_ver: *mut c_uint
 ) {
@@ -41,7 +41,7 @@ pub unsafe extern fn mexfilerequiredapiversion(
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub extern fn mexFunction(
+pub extern "C" fn mexFunction(
     nlhs: c_int, plhs: *mut MxArrayMut,
     nrhs: c_int, prhs: *const MxArray
 ) {

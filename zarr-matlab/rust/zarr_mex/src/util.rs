@@ -4,7 +4,21 @@ use std;
 use std::ffi::CStr;
 use std::slice;
 
+use zarrs::array::data_type::DataType;
+
 pub type Result<T> = std::result::Result<T, String>;
+
+#[derive(Debug, Clone)]
+pub struct BBox {
+    pub start: Vec<u64>,
+    pub shape: Vec<u64>,
+}
+
+impl BBox {
+    pub fn new(start: Vec<u64>, shape: Vec<u64>) -> BBox {
+        BBox { start, shape }
+    }
+}
 
 pub fn as_nat(f: f64) -> Result<u64> {
     if f <= 0.0 {
@@ -194,7 +208,7 @@ fn f64_slice_to_vec(buf: &[f64]) -> Result<Vec<u64>> {
         .collect()
 }
 
-pub fn mx_array_to_bbox(pm: MxArray, ndim: usize) -> Result<(Vec<u64>, Vec<u64>)> {
+pub fn mx_array_to_bbox(pm: MxArray, ndim: usize) -> Result<BBox> {
     let buf = mx_array_to_f64_slice(pm)?;
 
     // verify shape of array
@@ -239,5 +253,32 @@ pub fn mx_array_to_bbox(pm: MxArray, ndim: usize) -> Result<(Vec<u64>, Vec<u64>)
         ));
     }
 
-    Ok((bbox_min, bbox_shape))
+    Ok(BBox::new(bbox_min, bbox_shape))
+}
+
+pub fn zarrs_result_to_str_error<T, E: std::error::Error>(
+    result: std::result::Result<T, E>,
+) -> Result<T> {
+    match result {
+        Ok(ok) => Ok(ok),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+pub fn zarrs_data_type_to_mx(data_type: &DataType) -> Result<MxClassId> {
+    Ok(match data_type {
+        DataType::UInt8 => MxClassId::Uint8,
+        DataType::UInt16 => MxClassId::Uint16,
+        DataType::UInt32 => MxClassId::Uint32,
+        DataType::UInt64 => MxClassId::Uint64,
+        DataType::Float32 => MxClassId::Single,
+        DataType::Float64 => MxClassId::Double,
+        DataType::Int8 => MxClassId::Int8,
+        DataType::Int16 => MxClassId::Int16,
+        DataType::Int32 => MxClassId::Int32,
+        DataType::Int64 => MxClassId::Int64,
+        _ => {
+            return Err("Unsupported data type".to_string());
+        }
+    })
 }

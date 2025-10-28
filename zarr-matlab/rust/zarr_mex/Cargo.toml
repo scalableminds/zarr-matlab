@@ -1,16 +1,16 @@
 [package]
-name = "wkw_load"
+name = "zarr_mex"
 version = "1.4.0"
 authors = ["Alessandro Motta <alessandro.motta@brain.mpg.de>"]
 build = "build.rs"
 
 [dependencies]
 zarrs = "0.22.4"
-wkw_mex = { path = "../wkw_mex" }
+libc = "0.2"
 
 [profile.release]
 lto = true
 
 [lib]
-name = "wkw_load"
+name = "zarr_mex"
 crate-type = ["cdylib"]
