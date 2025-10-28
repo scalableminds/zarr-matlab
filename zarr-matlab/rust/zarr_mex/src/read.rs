@@ -8,6 +8,16 @@ use crate::ffi::*;
 use crate::util::*;
 
 pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
+    let (store_str, bbox_arr) = match rhs {
+        [store_str, bbox_arr] => (store_str, bbox_arr),
+        _ => {
+            return Err(format!(
+                "Invalid number of input arguments. Expected 2, got {}",
+                rhs.len()
+            ))
+        }
+    };
+
     let store_path: PathBuf = mx_array_to_str(rhs[0])?.into();
 
     let store: zarrs::storage::ReadableWritableListableStorage = Arc::new(
