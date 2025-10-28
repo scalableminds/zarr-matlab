@@ -1,5 +1,4 @@
 extern crate libc;
-extern crate wkwrap;
 
 mod ffi;
 mod macros;

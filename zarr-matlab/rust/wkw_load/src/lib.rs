@@ -1,4 +1,3 @@
-extern crate wkwrap;
 extern crate zarrs;
 
 #[macro_use]
