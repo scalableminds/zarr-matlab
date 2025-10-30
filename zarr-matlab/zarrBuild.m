@@ -20,10 +20,7 @@ function zarrBuild()
     % make link paths available for cargo
     exportExtraLinkPaths(extraLinkPaths);
     
-    %buildWithCargo('wkw_compress', 'wkwCompress');
-    %buildWithCargo('wkw_init', 'wkwInit');
     buildWithCargo('zarr_mex', 'zarrMex');
-    %buildWithCargo('wkw_save', 'wkwSaveRoi');
 end
 
 function buildWithCargo(oldName, newName)
@@ -42,14 +39,14 @@ function buildWithCargo(oldName, newName)
         [~, unameResult] = system('uname -m');
         if strcmp(strtrim(unameResult),'arm64')
             system('cargo build --release --target=aarch64-apple-darwin');
-            libDir = fullfile(cargoDir, 'target', 'aarch64-apple-darwin', 'release');
+            libDir = fullfile(thisDir, '..', 'target', 'aarch64-apple-darwin', 'release');
         else
             system('cargo build --release --target=x86_64-apple-darwin');
-            libDir = fullfile(cargoDir, 'target', 'x86_64-apple-darwin', 'release');
+            libDir = fullfile(thisDir, '..', 'target', 'x86_64-apple-darwin', 'release');
         end
     else
         system('cargo build --release');
-        libDir = fullfile(cargoDir, 'target', 'release');
+        libDir = fullfile(thisDir, '..', 'target', 'release');
     end
     
     % rename library

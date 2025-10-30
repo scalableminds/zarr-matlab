@@ -1,10 +1,5 @@
 .vscode
 
-# Scala-IDE specific
-.scala_dependencies
-.worksheet
-.idea/
-
 # macOS specific
 .DS_Store
 
@@ -15,3 +10,4 @@
 Cargo.lock
 
 zarr-matlab/rust/*/target
+/target
