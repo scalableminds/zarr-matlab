@@ -6,18 +6,21 @@ use std::sync::Arc;
 use crate::ffi::*;
 use crate::util::*;
 
-pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
-    if rhs.len() != 2 {
+pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
+    if rhs.len() != 3 {
         return Err(format!(
-            "Invalid number of input arguments. Expected 2, got {}",
+            "Invalid number of input arguments. Expected 3, got {}",
             rhs.len()
         ));
     }
 
     let store_str = rhs[0];
     let bbox_arr = rhs[1];
+    let data_arr = rhs[2];
 
     let store_path: PathBuf = mx_array_to_str(store_str)?.into();
+
+    println!("store_path: {:?}", store_path);
 
     let store: zarrs::storage::ReadableWritableListableStorage = Arc::new(
         zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?,
@@ -41,16 +44,26 @@ pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
     bbox.check_bounds(array_shape)?;
     let subset = bbox.to_subset()?;
 
-    // prepare allocation
-    let mat_class = zarrs_data_type_to_mx(&array.data_type())?;
+    println!("subset: {:?}", subset);
 
-    // read data
-    let data_all = zarrs_result_to_str_error(array.retrieve_array_subset(&subset))?;
-    let zarr_buf = zarrs_result_to_str_error(data_all.into_fixed())?.into_owned(); // in c-order
+    // prepare data for write
+    let array_class = zarrs_data_type_to_mx(&array.data_type())?;
+    let data_class = unsafe { mxGetClassID(data_arr) };
+    // if array_class != data_class {
+    return Err(format!(
+        "Data type mismatch. Expected {:?} from Zarr array, got {:?} from input.",
+        array_class, data_class
+    ));
+    // }
 
-    let mat_arr = create_numeric_array(&bbox.shape, mat_class, MxComplexity::Real)?;
+    // println!("data_class: {:?}", data_class);
 
-    copy_as_fortran_order(&zarr_buf, mat_arr, &bbox.shape, type_size)?;
+    // let data_bytes = copy_as_c_order(data_arr, &bbox.shape, type_size)?;
 
-    Ok(mat_arr)
+    // println!("c-order");
+
+    // // write data
+    // zarrs_result_to_str_error(array.store_array_subset(&subset, data_bytes))?;
+
+    Ok(())
 }

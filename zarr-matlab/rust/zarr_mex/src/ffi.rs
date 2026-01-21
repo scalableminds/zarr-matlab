@@ -18,6 +18,7 @@ pub enum MxComplexity {
 }
 
 #[repr(C)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MxClassId {
     // from tyepdef enum { .. } mxClassID in
     // $MATLABROOT/extern/include/matrix.h:262 of MATLAB R2016b

@@ -5,26 +5,22 @@ mod ffi;
 mod macros;
 mod read;
 mod util;
+mod write;
 
 use ffi::*;
 use util::*;
 
 use std::slice;
 
-unsafe fn dispatch(
-    nlhs: c_int,
-    plhs: *mut MxArrayMut,
-    nrhs: c_int,
-    prhs: *const MxArray,
-) -> Result<()> {
+fn dispatch(nlhs: c_int, plhs: *mut MxArrayMut, nrhs: c_int, prhs: *const MxArray) -> Result<()> {
     let rhs = if nrhs > 0 {
-        slice::from_raw_parts(prhs, nrhs as usize)
+        unsafe { slice::from_raw_parts(prhs, nrhs as usize) }
     } else {
         return Err("Invalid number of input arguments".to_string());
     };
 
     let lhs = if nlhs >= 0 {
-        slice::from_raw_parts_mut(plhs, nlhs as usize)
+        unsafe { slice::from_raw_parts_mut(plhs, nlhs as usize) }
     } else {
         return Err("Invalid number of output arguments".to_string());
     };
@@ -42,6 +38,15 @@ unsafe fn dispatch(
             }
             let mat_arr = crate::read::read(rhs)?;
             lhs[0] = mat_arr;
+        }
+        "write" => {
+            if lhs.len() != 0 {
+                return Err(format!(
+                    "Invalid number of output arguments. Expected 0, got {}.",
+                    lhs.len()
+                ));
+            }
+            crate::write::write(rhs)?;
         }
         _ => return Err(format!("Unknown command {:?}", command)),
     }

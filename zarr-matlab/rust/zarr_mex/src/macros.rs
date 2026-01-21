@@ -45,11 +45,11 @@ pub extern "C" fn mexFunction(
     nlhs: c_int, plhs: *mut MxArrayMut,
     nrhs: c_int, prhs: *const MxArray
 ) {
-    unsafe fn body(
+    fn body(
         $_nlhs: c_int, $_plhs: *mut MxArrayMut,
         $_nrhs: c_int, $_prhs: *const MxArray) -> Result<()> $_body
 
-    match unsafe { body(nlhs, plhs, nrhs, prhs) } {
+    match { body(nlhs, plhs, nrhs, prhs) } {
         Ok(_) => (),
         Err(msg) => die(&msg)
     }

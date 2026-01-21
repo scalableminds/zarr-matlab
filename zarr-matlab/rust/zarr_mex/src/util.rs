@@ -5,6 +5,7 @@ use std::ffi::CStr;
 use std::slice;
 
 use zarrs::array::data_type::DataType;
+use zarrs::array_subset::ArraySubset;
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -17,6 +18,30 @@ pub struct BBox {
 impl BBox {
     pub fn new(start: Vec<u64>, shape: Vec<u64>) -> BBox {
         BBox { start, shape }
+    }
+
+    pub fn check_bounds(&self, array_shape: &[u64]) -> Result<()> {
+        if self
+            .start
+            .iter()
+            .zip(self.shape.iter())
+            .zip(array_shape.iter())
+            .any(|((bbox_min_x, bbox_shape_x), shape_x)| (*bbox_min_x + *bbox_shape_x) > *shape_x)
+        {
+            return Err(format!(
+                "Bounding box {:?} is out of bounds for array of shape={:?}.",
+                self, array_shape
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn to_subset(&self) -> Result<ArraySubset> {
+        let subset = zarrs_result_to_str_error(ArraySubset::new_with_start_shape(
+            self.start.clone(),
+            self.shape.clone(),
+        ))?;
+        Ok(subset)
     }
 }
 
@@ -200,6 +225,58 @@ pub fn copy_as_fortran_order(
     }
 
     Ok(())
+}
+
+pub fn copy_as_c_order(in_arr: MxArray, shape: &[u64], type_size: usize) -> Result<Vec<u8>> {
+    let total_elems: usize = shape.iter().product::<u64>() as usize;
+    let total_bytes = total_elems * type_size;
+
+    let in_buf = mx_array_to_u8_slice(in_arr)?;
+    if in_buf.len() != total_bytes {
+        return Err(format!(
+            "Length of input array does not match expected size {} != {}",
+            in_buf.len(),
+            total_bytes,
+        ));
+    }
+
+    let mut result = vec![0u8; total_bytes];
+
+    // Compute C-order (row-major) strides
+    let ndim = shape.len();
+    let mut c_strides = vec![1u64; ndim];
+    for i in (0..ndim.saturating_sub(1)).rev() {
+        c_strides[i] = c_strides[i + 1] * shape[i + 1];
+    }
+
+    // Multi-dimensional index for F-order iteration
+    let mut idx = vec![0u64; ndim];
+
+    // Iterate over all elements in F-order (sequential read from Fortran-ordered input)
+    for elem_idx in 0..total_elems {
+        // Compute C-order (row-major) offset for scattered write
+        let c_offset_elems: u64 = idx.iter().zip(&c_strides).map(|(&i, &s)| i * s).sum();
+        let c_offset_bytes = c_offset_elems as usize * type_size;
+
+        // Sequential read from in_buf (F-order)
+        let src_offset_bytes = elem_idx * type_size;
+        let src_slice = &in_buf[src_offset_bytes..src_offset_bytes + type_size];
+
+        // Scattered write to result (C-order)
+        result[c_offset_bytes..c_offset_bytes + type_size].copy_from_slice(src_slice);
+
+        // Increment multi-dimensional index (F-order: first dimension varies fastest)
+        for d in 0..ndim {
+            idx[d] += 1;
+            if idx[d] < shape[d] {
+                break;
+            } else if d < ndim - 1 {
+                idx[d] = 0;
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 fn f64_slice_to_vec(buf: &[f64]) -> Result<Vec<u64>> {
