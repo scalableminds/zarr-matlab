@@ -20,7 +20,7 @@ jobs:
       - name: Run wkwBuild
         uses: matlab-actions/run-command@v2
         with:
-          command: cd zarr-matlab, zarrBuild
+          command: cd zarr-matlab, zarrBuild, zarrTest
 
       - uses: actions/upload-artifact@v4
         with:

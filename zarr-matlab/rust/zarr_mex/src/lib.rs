@@ -1,9 +1,12 @@
 extern crate libc;
 extern crate zarrs;
 
+mod create;
 mod ffi;
+mod info;
 mod macros;
 mod read;
+mod resize;
 mod util;
 mod write;
 
@@ -47,6 +50,33 @@ fn dispatch(nlhs: c_int, plhs: *mut MxArrayMut, nrhs: c_int, prhs: *const MxArra
                 ));
             }
             crate::write::write(rhs)?;
+        }
+        "create" => {
+            if lhs.len() != 0 {
+                return Err(format!(
+                    "Invalid number of output arguments. Expected 0, got {}.",
+                    lhs.len()
+                ));
+            }
+            crate::create::create(rhs)?;
+        }
+        "resize" => {
+            if lhs.len() != 0 {
+                return Err(format!(
+                    "Invalid number of output arguments. Expected 0, got {}.",
+                    lhs.len()
+                ));
+            }
+            crate::resize::resize(rhs)?;
+        }
+        "info" => {
+            if lhs.len() != 1 {
+                return Err(format!(
+                    "Invalid number of output arguments. Expected 1, got {}.",
+                    lhs.len()
+                ));
+            }
+            lhs[0] = crate::info::info(rhs)?;
         }
         _ => return Err(format!("Unknown command {:?}", command)),
     }

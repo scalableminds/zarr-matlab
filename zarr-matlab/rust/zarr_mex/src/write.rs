@@ -20,8 +20,6 @@ pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
 
     let store_path: PathBuf = mx_array_to_str(store_str)?.into();
 
-    println!("store_path: {:?}", store_path);
-
     let store: zarrs::storage::ReadableWritableListableStorage = Arc::new(
         zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?,
     );
@@ -44,26 +42,21 @@ pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
     bbox.check_bounds(array_shape)?;
     let subset = bbox.to_subset()?;
 
-    println!("subset: {:?}", subset);
-
     // prepare data for write
     let array_class = zarrs_data_type_to_mx(&array.data_type())?;
     let data_class = unsafe { mxGetClassID(data_arr) };
-    // if array_class != data_class {
-    return Err(format!(
-        "Data type mismatch. Expected {:?} from Zarr array, got {:?} from input.",
-        array_class, data_class
-    ));
-    // }
 
-    // println!("data_class: {:?}", data_class);
+    if array_class != data_class {
+        return Err(format!(
+            "Data type mismatch. Expected {:?} from Zarr array, got {:?} from input.",
+            array_class, data_class
+        ));
+    }
 
-    // let data_bytes = copy_as_c_order(data_arr, &bbox.shape, type_size)?;
+    let data_bytes = copy_as_c_order(data_arr, &bbox.shape, type_size)?;
 
-    // println!("c-order");
-
-    // // write data
-    // zarrs_result_to_str_error(array.store_array_subset(&subset, data_bytes))?;
+    // write data
+    zarrs_result_to_str_error(array.store_array_subset(&subset, data_bytes))?;
 
     Ok(())
 }

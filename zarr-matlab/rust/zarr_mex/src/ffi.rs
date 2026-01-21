@@ -1,4 +1,4 @@
-pub use libc::{c_double, c_int, c_uchar, c_uint, c_void, size_t};
+pub use libc::{c_double, c_int, c_uint, c_void, size_t};
 pub use std::os::raw::c_char;
 
 // HACK(amotta): There is no guarantee for this
@@ -48,7 +48,7 @@ pub enum MxClassId {
 #[cfg_attr(target_os = "linux", link(name = "mx", kind = "dylib"))]
 #[cfg_attr(target_os = "macos", link(name = "mx", kind = "dylib"))]
 #[cfg_attr(target_os = "windows", link(name = "libmx", kind = "dylib"))]
-extern "C" {
+extern "C-unwind" {
     // creation
     #[link_name = "mxCreateNumericArray_730"]
     pub fn mxCreateNumericArray(
@@ -57,7 +57,6 @@ extern "C" {
         class_id: c_int,
         complex_flag: c_int,
     ) -> MxArrayMut;
-    pub fn mxMalloc(n: MwSize) -> *mut c_void;
 
     // access
     pub fn mxGetPr(pm: MxArray) -> *mut c_double;
@@ -76,11 +75,25 @@ extern "C" {
     pub fn mxIsScalar(pm: MxArray) -> c_bool;
     pub fn mxIsDouble(pm: MxArray) -> c_bool;
     pub fn mxIsComplex(pm: MxArray) -> c_bool;
+
+    // struct creation and access
+    #[link_name = "mxCreateStructMatrix_730"]
+    pub fn mxCreateStructMatrix(
+        m: size_t,
+        n: size_t,
+        nfields: c_int,
+        fieldnames: *const *const c_char,
+    ) -> MxArrayMut;
+    #[link_name = "mxSetField_730"]
+    pub fn mxSetField(pm: MxArrayMut, index: size_t, fieldname: *const c_char, pvalue: MxArrayMut);
+
+    // string creation
+    pub fn mxCreateString(str: *const c_char) -> MxArrayMut;
 }
 
 #[cfg_attr(target_os = "linux", link(name = "mex", kind = "dylib"))]
 #[cfg_attr(target_os = "macos", link(name = "mex", kind = "dylib"))]
 #[cfg_attr(target_os = "windows", link(name = "libmex", kind = "dylib"))]
-extern "C" {
-    pub fn mexErrMsgTxt(errormsg: *const c_uchar);
+extern "C-unwind" {
+    pub fn mexErrMsgIdAndTxt(errorid: *const c_char, errormsg: *const c_char) -> ();
 }

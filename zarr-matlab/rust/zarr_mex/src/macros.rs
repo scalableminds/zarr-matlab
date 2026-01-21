@@ -41,7 +41,7 @@ pub unsafe extern "C" fn mexfilerequiredapiversion(
 
 #[no_mangle]
 #[allow(non_snake_case)]
-pub extern "C" fn mexFunction(
+pub extern "C-unwind" fn mexFunction(
     nlhs: c_int, plhs: *mut MxArrayMut,
     nrhs: c_int, prhs: *const MxArray
 ) {

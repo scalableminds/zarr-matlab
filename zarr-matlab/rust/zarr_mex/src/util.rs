@@ -1,7 +1,7 @@
 use ffi::*;
 
 use std;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::slice;
 
 use zarrs::array::data_type::DataType;
@@ -145,26 +145,11 @@ pub fn create_numeric_array(
     }
 }
 
-pub fn malloc(n: usize) -> Result<&'static mut [u8]> {
-    let ptr = unsafe { mxMalloc(n as MwSize) } as *mut u8;
-
-    match ptr.is_null() {
-        true => Err("Failed to allocate memory".to_string()),
-        false => Ok(unsafe { slice::from_raw_parts_mut(ptr, n) }),
-    }
-}
-
 pub fn die(msg: &str) {
-    let bytes = msg.as_bytes();
-    let len = bytes.len();
-
-    // build zero-terminated string
-    let buf = malloc(len + 1).unwrap();
-    buf[..len].copy_from_slice(bytes);
-    buf[len] = 0;
-
-    // die
-    unsafe { mexErrMsgTxt(buf.as_ptr()) }
+    let c_id = CString::new("zarr:error").unwrap();
+    let c_msg = CString::new(msg)
+        .unwrap_or_else(|_| CString::new("Error message contained null byte").unwrap());
+    unsafe { mexErrMsgIdAndTxt(c_id.as_ptr(), c_msg.as_ptr()) }
 }
 
 pub fn copy_as_fortran_order(
