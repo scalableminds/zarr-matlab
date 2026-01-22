@@ -1,6 +1,4 @@
 # TODO
 
-- Create some usage examples in the README
+- Defaults for chunk shape, codecs
 - Packaging and publishing
-- Defaults for chunk shape, codecs, data type
-- From-data array creation

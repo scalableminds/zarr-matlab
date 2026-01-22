@@ -24,11 +24,22 @@ arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'float32', [32, 32, 32
     'codec', struct('name', 'zstd', 'configuration', struct('level', 10)));
 ```
 
-Supported data types: `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`
+Create an array from existing data (shape and data type are inferred):
 
-Supported compression codecs: `zstd`, `gzip`, `blosc`
+```matlab
+% Create from existing MATLAB array
+data = uint16(rand(100, 100, 100) * 65535);
+arr = ZarrArray.createFromData('/path/to/array', data, [32, 32, 32]);
 
-Note that all new ZarrArrays are created with the `transpose` codec to represent Fortran-order arrays.
+% Create from data with compression
+data = rand(64, 64, 64);  % double -> float64
+arr = ZarrArray.createFromData('/path/to/array', data, [32, 32, 32], 'codec', 'zstd');
+```
+
+Notes:
+- Supported data types: `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`
+- Supported compression codecs: `zstd`, `gzip`, `blosc`
+- All arrays are created with the `transpose` codec to represent Fortran-order arrays.
 
 Open an existing array and read/write data:
 
@@ -122,7 +133,7 @@ results = runtests('tests');
 
 ## Credits
 
-Uses the Rust-based [zarrs](https://zarrs.dev) library for the Zarr IO.
+Uses the Rust-based [zarrs](https://zarrs.dev) library for the Zarr IO. Developed by [Lachlan Deakin](https://github.com/LDeakin) and other contributors.
 
 Uses the Rust-MATLAB binding originally developed for the [WKW format](https://github.com/scalableminds/webknossos-wrap). Developed by Alessandro Motta at the [Max Planck Institute for Brain Research](https://brain.mpg.de/)
 

@@ -97,9 +97,55 @@ classdef ZarrArray < handle
             zarrMex('create', path, json);
             arr = ZarrArray(path);
         end
+
+        function arr = createFromData(path, data, chunkShape, varargin)
+            % CREATEFROMDATA Create a new Zarr array from existing data
+            %   arr = ZarrArray.createFromData(path, data, chunkShape)
+            %   arr = ZarrArray.createFromData(path, data, chunkShape, 'shardShape', shardShape)
+            %   arr = ZarrArray.createFromData(path, data, chunkShape, 'codec', 'zstd')
+            %
+            %   Arguments:
+            %     path       - Path where the array will be created
+            %     data       - MATLAB array to store (data type and shape are inferred)
+            %     chunkShape - Chunk shape as a vector, e.g. [32, 32, 32]
+            %
+            %   Optional Name-Value Arguments:
+            %     shardShape - Shard shape for sharded arrays (enables sharding codec)
+            %     codec      - Compression codec ('zstd', 'gzip', 'blosc' or struct)
+            %
+            %   Example:
+            %     data = uint16(rand(100, 100, 100) * 65535);
+            %     arr = ZarrArray.createFromData('/path/to/array', data, [32, 32, 32], 'codec', 'zstd');
+
+            % Infer shape from data
+            shape = size(data);
+
+            % Infer data type from data
+            dataType = ZarrArray.matlabClassToZarrType(class(data));
+
+            % Create array and write data
+            arr = ZarrArray.create(path, shape, dataType, chunkShape, varargin{:});
+
+            % Write the data
+            bbox = [ones(numel(shape), 1), (shape(:) + 1)];
+            arr.write(bbox, data);
+        end
     end
 
     methods (Static, Access = private)
+        function zarrType = matlabClassToZarrType(matlabClass)
+            % MATLABCLASSTOZARRTYPE Convert MATLAB class name to Zarr data type string
+            switch matlabClass
+                case 'single'
+                    zarrType = 'float32';
+                case 'double'
+                    zarrType = 'float64';
+                case {'uint8', 'uint16', 'uint32', 'uint64', 'int8', 'int16', 'int32', 'int64'}
+                    zarrType = matlabClass;
+                otherwise
+                    error('zarr:error', 'Unsupported data type: %s', matlabClass);
+            end
+        end
         function codec = buildCodec(codecParam, dataType)
             % BUILDCODEC Build a codec struct from string or struct input
             %   Adds default configuration for compression codecs if not provided

@@ -148,6 +148,49 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(readData, testData);
         end
 
+        function testCreateFromData(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'from_data');
+            testData = uint16(randi(65535, [50, 40, 30]));
+
+            arr = ZarrArray.createFromData(arrayPath, testData, [16, 16, 16]);
+
+            testCase.verifyEqual(arr.shape(), [50, 40, 30]);
+            info = arr.info();
+            testCase.verifyEqual(info.dataType, 'uint16');
+
+            bbox = [1, 51; 1, 41; 1, 31];
+            readData = arr.read(bbox);
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testCreateFromDataWithCodec(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'from_data_zstd');
+            testData = single(rand(32, 32, 32));
+
+            arr = ZarrArray.createFromData(arrayPath, testData, [16, 16, 16], 'codec', 'zstd');
+
+            info = arr.info();
+            testCase.verifyEqual(info.dataType, 'float32');
+
+            bbox = [1, 33; 1, 33; 1, 33];
+            readData = arr.read(bbox);
+            testCase.verifyLessThan(max(abs(testData(:) - readData(:))), 1e-6);
+        end
+
+        function testCreateFromDataDouble(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'from_data_double');
+            testData = rand(20, 20, 20);  % double by default
+
+            arr = ZarrArray.createFromData(arrayPath, testData, [10, 10, 10]);
+
+            info = arr.info();
+            testCase.verifyEqual(info.dataType, 'float64');
+
+            bbox = [1, 21; 1, 21; 1, 21];
+            readData = arr.read(bbox);
+            testCase.verifyLessThan(max(abs(testData(:) - readData(:))), 1e-10);
+        end
+
         % Error Tests
 
         function testWriteWithWrongDataType(testCase)
