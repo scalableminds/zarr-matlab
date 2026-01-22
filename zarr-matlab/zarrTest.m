@@ -1,5 +1,5 @@
 function zarrTest()
-    path = '/Users/norman/scalableminds/webknossos/binaryData/Organization_X/l4_sample/segmentation/1';
+    path = '../testdata/l4_sample/segmentation/1';
 
     % Test read command
     bbox = [1, 2; 3074, 3075; 3074, 3075; 514, 515];
@@ -62,7 +62,7 @@ function zarrTest()
 
     % Test info command
     info = zarrMex('info', test_path);
-    disp(info); 
+    disp(info);
     expected_bbox = [1, 201; 1, 151; 1, 101];
     assert(isequal(info.boundingBox, expected_bbox), ...
         'Bounding box does not match expected value');
@@ -73,4 +73,121 @@ function zarrTest()
     assert(isequal(info.shardShape, [32, 32, 32]), ...
         'Shard shape does not match expected value');
 
+    % Test ZarrArray class
+    testZarrArrayClass();
+
+end
+
+function testZarrArrayClass()
+    % Test ZarrArray.create without sharding
+    test_path = '/tmp/zarr_class_test';
+    if isfolder(test_path)
+        rmdir(test_path, 's');
+    end
+
+    arr = ZarrArray.create(test_path, [100, 100, 100], 'uint16', [32, 32, 32]);
+    assert(isfile(fullfile(test_path, 'zarr.json')), ...
+        'zarr.json not created');
+
+    % Test info method
+    info = arr.info();
+    assert(isequal(info.boundingBox, [1, 101; 1, 101; 1, 101]), ...
+        'ZarrArray.info boundingBox mismatch');
+    assert(strcmp(info.dataType, 'uint16'), ...
+        'ZarrArray.info dataType mismatch');
+    assert(isequal(info.chunkShape, [32, 32, 32]), ...
+        'ZarrArray.info chunkShape mismatch');
+
+    % Test shape method
+    assert(isequal(arr.shape(), [100, 100, 100]), ...
+        'ZarrArray.shape mismatch');
+
+    % Test resize method
+    arr.resize([150, 120, 100]);
+    assert(isequal(arr.shape(), [150, 120, 100]), ...
+        'ZarrArray.resize failed');
+
+    % Test write and read methods
+    test_data = uint16(reshape(1:1000, [10, 10, 10]));
+    bbox = [1, 11; 1, 11; 1, 11];
+    arr.write(bbox, test_data);
+    read_data = arr.read(bbox);
+    assert(isequal(test_data, read_data), ...
+        'ZarrArray write/read roundtrip failed');
+
+    % Test ZarrArray.create with sharding
+    test_path_sharded = '/tmp/zarr_class_test_sharded';
+    if isfolder(test_path_sharded)
+        rmdir(test_path_sharded, 's');
+    end
+
+    arr_sharded = ZarrArray.create(test_path_sharded, [128, 128, 128], 'float32', ...
+        [32, 32, 32], 'shardShape', [64, 64, 64]);
+
+    info_sharded = arr_sharded.info();
+    assert(strcmp(info_sharded.dataType, 'float32'), ...
+        'Sharded array dataType mismatch');
+    assert(isequal(info_sharded.chunkShape, [32, 32, 32]), ...
+        'Sharded array chunkShape mismatch');
+    assert(isequal(info_sharded.shardShape, [64, 64, 64]), ...
+        'Sharded array shardShape mismatch');
+
+    % Test opening existing array
+    arr_opened = ZarrArray(test_path);
+    assert(isequal(arr_opened.shape(), [150, 120, 100]), ...
+        'Opening existing array failed');
+
+    % Test ZarrArray.create with zstd codec (simple string)
+    test_path_zstd = '/tmp/zarr_class_test_zstd';
+    if isfolder(test_path_zstd)
+        rmdir(test_path_zstd, 's');
+    end
+    arr_zstd = ZarrArray.create(test_path_zstd, [64, 64, 64], 'uint8', [32, 32, 32], ...
+        'codec', 'zstd');
+    test_data_zstd = uint8(randi(255, [32, 32, 32]));
+    arr_zstd.write([1, 33; 1, 33; 1, 33], test_data_zstd);
+    read_data_zstd = arr_zstd.read([1, 33; 1, 33; 1, 33]);
+    assert(isequal(test_data_zstd, read_data_zstd), ...
+        'ZarrArray with zstd codec write/read roundtrip failed');
+
+    % Test ZarrArray.create with zstd codec and configuration
+    test_path_zstd_cfg = '/tmp/zarr_class_test_zstd_cfg';
+    if isfolder(test_path_zstd_cfg)
+        rmdir(test_path_zstd_cfg, 's');
+    end
+    arr_zstd_cfg = ZarrArray.create(test_path_zstd_cfg, [64, 64, 64], 'int32', [32, 32, 32], ...
+        'codec', struct('name', 'zstd', 'configuration', struct('level', 10)));
+    test_data_zstd_cfg = int32(randi(1000000, [32, 32, 32]));
+    arr_zstd_cfg.write([1, 33; 1, 33; 1, 33], test_data_zstd_cfg);
+    read_data_zstd_cfg = arr_zstd_cfg.read([1, 33; 1, 33; 1, 33]);
+    assert(isequal(test_data_zstd_cfg, read_data_zstd_cfg), ...
+        'ZarrArray with zstd codec (configured) write/read roundtrip failed');
+
+    % Test ZarrArray.create with gzip codec
+    test_path_gzip = '/tmp/zarr_class_test_gzip';
+    if isfolder(test_path_gzip)
+        rmdir(test_path_gzip, 's');
+    end
+    arr_gzip = ZarrArray.create(test_path_gzip, [64, 64, 64], 'float64', [32, 32, 32], ...
+        'codec', struct('name', 'gzip', 'configuration', struct('level', 6)));
+    test_data_gzip = rand(32, 32, 32);
+    arr_gzip.write([1, 33; 1, 33; 1, 33], test_data_gzip);
+    read_data_gzip = arr_gzip.read([1, 33; 1, 33; 1, 33]);
+    assert(max(abs(test_data_gzip(:) - read_data_gzip(:))) < 1e-10, ...
+        'ZarrArray with gzip codec write/read roundtrip failed');
+
+    % Test ZarrArray.create with sharding and zstd codec
+    test_path_shard_zstd = '/tmp/zarr_class_test_shard_zstd';
+    if isfolder(test_path_shard_zstd)
+        rmdir(test_path_shard_zstd, 's');
+    end
+    arr_shard_zstd = ZarrArray.create(test_path_shard_zstd, [128, 128, 128], 'uint16', ...
+        [16, 16, 16], 'shardShape', [64, 64, 64], 'codec', 'zstd');
+    test_data_shard = uint16(randi(65535, [32, 32, 32]));
+    arr_shard_zstd.write([1, 33; 1, 33; 1, 33], test_data_shard);
+    read_data_shard = arr_shard_zstd.read([1, 33; 1, 33; 1, 33]);
+    assert(isequal(test_data_shard, read_data_shard), ...
+        'ZarrArray with sharding and zstd codec write/read roundtrip failed');
+
+    disp('All ZarrArray class tests passed!');
 end

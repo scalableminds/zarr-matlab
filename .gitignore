@@ -11,3 +11,5 @@ Cargo.lock
 
 zarr-matlab/rust/*/target
 /target
+/testdata
+/testoutput
