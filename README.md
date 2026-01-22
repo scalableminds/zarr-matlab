@@ -80,6 +80,10 @@ seg_data = segmentation.createArray('data', [1000, 1000, 500], 'uint32', [64, 64
     'shardShape', [256, 256, 256], 'codec', 'zstd');
 raw_data = raw.createArray('data', [1000, 1000, 500], 'uint8', [64, 64, 64]);
 
+% Create array from existing data (shape and type inferred)
+data = uint16(rand(100, 100, 50) * 65535);
+arr = root.createArrayFromData('processed', data, [32, 32, 32], 'codec', 'zstd');
+
 % List contents
 names = root.list();                    % Returns {'raw', 'segmentation'}
 [groups, arrays] = root.listContents(); % Separate groups and arrays

@@ -168,6 +168,32 @@ classdef ZarrGroup < handle
             arr = ZarrArray.create(subpath, shape, dataType, chunkShape, varargin{:});
         end
 
+        function arr = createArrayFromData(obj, name, data, chunkShape, varargin)
+            % CREATEARRAYFROMDATA Create a new array from existing data within this group
+            %   arr = grp.createArrayFromData(name, data, chunkShape)
+            %   arr = grp.createArrayFromData(name, data, chunkShape, 'shardShape', shardShape)
+            %   arr = grp.createArrayFromData(name, data, chunkShape, 'codec', 'zstd')
+            %
+            %   Arguments:
+            %     name       - Name of the array to create
+            %     data       - MATLAB array to store (data type and shape are inferred)
+            %     chunkShape - Chunk shape as a vector
+            %
+            %   Optional Name-Value Arguments:
+            %     shardShape - Shard shape for sharded arrays
+            %     codec      - Compression codec
+            %
+            %   Returns:
+            %     arr - ZarrArray object for the new array
+
+            if ZarrGroup.isHttpUrl(obj.path)
+                error('zarr:error', 'Cannot create arrays at HTTP URLs');
+            end
+
+            subpath = fullfile(obj.path, name);
+            arr = ZarrArray.createFromData(subpath, data, chunkShape, varargin{:});
+        end
+
         function names = list(obj)
             % LIST List all items (groups and arrays) in this group
             %   names = grp.list()

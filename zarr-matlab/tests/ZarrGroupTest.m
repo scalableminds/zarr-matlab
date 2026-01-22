@@ -91,6 +91,24 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             testCase.verifyEqual(arr.shape(), [32, 32, 32]);
         end
 
+        function testCreateArrayFromData(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_from_data');
+            grp = ZarrGroup.create(groupPath);
+
+            testData = uint32(randi(1000000, [40, 30, 20]));
+            arr = grp.createArrayFromData('mydata', testData, [16, 16, 16], 'codec', 'zstd');
+
+            testCase.verifyTrue(isfile(fullfile(groupPath, 'mydata', 'zarr.json')));
+            testCase.verifyEqual(arr.shape(), [40, 30, 20]);
+
+            info = arr.info();
+            testCase.verifyEqual(info.dataType, 'uint32');
+
+            bbox = [1, 41; 1, 31; 1, 21];
+            readData = arr.read(bbox);
+            testCase.verifyEqual(readData, testData);
+        end
+
         function testList(testCase)
             groupPath = fullfile(testCase.TempDir, 'group_list');
             grp = ZarrGroup.create(groupPath);
