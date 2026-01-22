@@ -23,9 +23,9 @@ jobs:
           command: cd zarr-matlab, zarrBuild
 
       - name: Run zarrTest
-        uses: matlab-actions/run-command@v2
+        uses: matlab-actions/run-tests@v2
         with:
-          command: cd zarr-matlab, runtests(["ZarrTest"])
+          source-folder: zarr-matlab
 
       - uses: actions/upload-artifact@v4
         with:
