@@ -22,18 +22,10 @@ jobs:
         with:
           command: cd zarr-matlab, zarrBuild
 
-      - name: Download testdata
-        run: |
-          mkdir testdata
-          curl https://static.webknossos.org/data/zarr_v3/l4_sample.zip -o testdata/l4_sample.zip
-          cd testdata
-          unzip l4_sample.zip
-          rm l4_sample.zip
-
       - name: Run zarrTest
         uses: matlab-actions/run-command@v2
         with:
-          command: cd zarr-matlab, zarrTest
+          command: cd zarr-matlab, runtests(["ZarrTest"])
 
       - uses: actions/upload-artifact@v4
         with:

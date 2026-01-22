@@ -1,8 +1,5 @@
 use zarrs::array::Array;
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use crate::ffi::*;
 use crate::util::*;
 
@@ -18,12 +15,9 @@ pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
     let bbox_arr = rhs[1];
     let data_arr = rhs[2];
 
-    let store_path: PathBuf = mx_array_to_str(store_str)?.into();
-
-    let store: zarrs::storage::ReadableWritableListableStorage = Arc::new(
-        zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?,
-    );
-    let array = zarrs_result_to_str_error(Array::open(store.clone(), "/"))?;
+    let path = mx_array_to_str(store_str)?;
+    let store = create_writable_store(path)?;
+    let array = zarrs_result_to_str_error(Array::open(store, "/"))?;
 
     let array_shape = array.shape();
     let ndim = array_shape.len();

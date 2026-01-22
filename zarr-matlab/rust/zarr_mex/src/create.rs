@@ -1,8 +1,5 @@
 use zarrs::array::{Array, ArrayMetadataOptions, ArrayMetadataV3};
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use crate::ffi::*;
 use crate::util::*;
 
@@ -17,7 +14,7 @@ pub(crate) fn create(rhs: &[MxArray]) -> Result<()> {
     let store_str = rhs[0];
     let json_str = rhs[1];
 
-    let store_path: PathBuf = mx_array_to_str(store_str)?.into();
+    let path = mx_array_to_str(store_str)?;
     let json = mx_array_to_str(json_str)?;
 
     // Parse JSON as ArrayMetadataV3
@@ -27,13 +24,11 @@ pub(crate) fn create(rhs: &[MxArray]) -> Result<()> {
         return Err("Failed to parse JSON metadata".to_string());
     };
 
-    let store: zarrs::storage::ReadableWritableListableStorage = Arc::new(
-        zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?,
-    );
+    let store = create_writable_store(path)?;
 
     // Create the array with the provided metadata
     let array = zarrs_result_to_str_error(Array::new_with_metadata(
-        store.clone(),
+        store,
         "/",
         metadata.into(),
     ))?;

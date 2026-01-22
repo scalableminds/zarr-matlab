@@ -2,10 +2,13 @@ use ffi::*;
 
 use std;
 use std::ffi::{CStr, CString};
+use std::path::PathBuf;
 use std::slice;
+use std::sync::Arc;
 
 use zarrs::array::data_type::DataType;
 use zarrs::array_subset::ArraySubset;
+use zarrs::storage::{ReadableStorage, ReadableWritableListableStorage};
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -343,4 +346,29 @@ pub fn zarrs_data_type_to_mx(data_type: &DataType) -> Result<MxClassId> {
             return Err("Unsupported data type".to_string());
         }
     })
+}
+
+pub fn is_http_url(path: &str) -> bool {
+    path.starts_with("http://") || path.starts_with("https://")
+}
+
+pub fn create_readable_store(path: &str) -> Result<ReadableStorage> {
+    if is_http_url(path) {
+        let store = zarrs_result_to_str_error(zarrs_http::HTTPStore::new(path))?;
+        Ok(Arc::new(store))
+    } else {
+        let store_path: PathBuf = path.into();
+        let store =
+            zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?;
+        Ok(Arc::new(store))
+    }
+}
+
+pub fn create_writable_store(path: &str) -> Result<ReadableWritableListableStorage> {
+    if is_http_url(path) {
+        return Err("HTTP URLs are not supported for write operations".to_string());
+    }
+    let store_path: PathBuf = path.into();
+    let store = zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?;
+    Ok(Arc::new(store))
 }

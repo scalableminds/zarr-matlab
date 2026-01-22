@@ -1,193 +1,313 @@
-function zarrTest()
-    path = '../testdata/l4_sample/segmentation/1';
+classdef ZarrTest < matlab.unittest.TestCase
 
-    % Test read command
-    bbox = [1, 2; 3074, 3075; 3074, 3075; 514, 515];
-    data = zarrMex('read', path, bbox);
-    assert(data == 988274);
-
-    % Test write command
-    data = cast(reshape(linspace(0, 999, 1000), [1, 10, 10, 10]), "uint32");
-    bbox = [1, 2; 1, 11; 1, 11; 1, 11];
-    zarrMex('write', path, bbox, data);
-    data_Read = zarrMex('read', path, bbox);
-    assert(isequal(data, data_Read));
-
-    % Test create command
-    test_path = '/tmp/zarr_test';
-    if isfolder(test_path)
-        rmdir(test_path, 's');
-    end
-    json = jsonencode(struct( ...
-        'zarr_format', 3, ...
-        'node_type', 'array', ...
-        'shape', [100, 100, 100], ...
-        'data_type', 'uint8', ...
-        'chunk_grid', struct( ...
-            'name', 'regular', ...
-            'configuration', struct('chunk_shape', [32, 32, 32]) ...
-        ), ...
-        'chunk_key_encoding', struct( ...
-            'name', 'default', ...
-            'configuration', struct('separator', '/') ...
-        ), ...
-        'fill_value', 0, ...
-        'codecs', {{ struct( ...
-            'name', 'sharding_indexed', ...
-            'configuration', struct( ...
-                'chunk_shape', [32, 32, 32], ...
-                'codecs', {{ struct('name', 'bytes') }}, ...
-                'index_location', 'end', ...
-                'index_codecs', {{ struct('name', 'bytes'), struct('name', 'crc32c') }} ...
-            )) }} ...
-    ));
-    zarrMex('create', test_path, json);
-    assert(isfile(fullfile(test_path, 'zarr.json')));
-
-    % Compare zarr.json contents with original JSON
-    zarr_json_path = fullfile(test_path, 'zarr.json');
-    written_json = fileread(zarr_json_path);
-    original_struct = jsondecode(json);
-    written_struct = jsondecode(written_json);
-    assert(isequal(original_struct, written_struct), ...
-        'zarr.json contents do not match the original JSON');
-
-    % Test resize command
-    new_shape = [200, 150, 100];
-    zarrMex('resize', test_path, new_shape);
-    resized_json = fileread(zarr_json_path);
-    resized_struct = jsondecode(resized_json);
-    assert(isequal(resized_struct.shape, new_shape'), ...
-        'Shape after resize does not match expected shape');
-
-    % Test info command
-    info = zarrMex('info', test_path);
-    disp(info);
-    expected_bbox = [1, 201; 1, 151; 1, 101];
-    assert(isequal(info.boundingBox, expected_bbox), ...
-        'Bounding box does not match expected value');
-    assert(strcmp(info.dataType, 'uint8'), ...
-        'Data type does not match expected value');
-    assert(isequal(info.chunkShape, [32, 32, 32]), ...
-        'Chunk shape does not match expected value');
-    assert(isequal(info.shardShape, [32, 32, 32]), ...
-        'Shard shape does not match expected value');
-
-    % Test ZarrArray class
-    testZarrArrayClass();
-
-end
-
-function testZarrArrayClass()
-    % Test ZarrArray.create without sharding
-    test_path = '/tmp/zarr_class_test';
-    if isfolder(test_path)
-        rmdir(test_path, 's');
+    properties (Constant)
+        RemotePath = 'https://static.webknossos.org/data/zarr_v3/l4_sample/segmentation/1';
+        TempDir = '/tmp/zarr_matlab_test';
     end
 
-    arr = ZarrArray.create(test_path, [100, 100, 100], 'uint16', [32, 32, 32]);
-    assert(isfile(fullfile(test_path, 'zarr.json')), ...
-        'zarr.json not created');
-
-    % Test info method
-    info = arr.info();
-    assert(isequal(info.boundingBox, [1, 101; 1, 101; 1, 101]), ...
-        'ZarrArray.info boundingBox mismatch');
-    assert(strcmp(info.dataType, 'uint16'), ...
-        'ZarrArray.info dataType mismatch');
-    assert(isequal(info.chunkShape, [32, 32, 32]), ...
-        'ZarrArray.info chunkShape mismatch');
-
-    % Test shape method
-    assert(isequal(arr.shape(), [100, 100, 100]), ...
-        'ZarrArray.shape mismatch');
-
-    % Test resize method
-    arr.resize([150, 120, 100]);
-    assert(isequal(arr.shape(), [150, 120, 100]), ...
-        'ZarrArray.resize failed');
-
-    % Test write and read methods
-    test_data = uint16(reshape(1:1000, [10, 10, 10]));
-    bbox = [1, 11; 1, 11; 1, 11];
-    arr.write(bbox, test_data);
-    read_data = arr.read(bbox);
-    assert(isequal(test_data, read_data), ...
-        'ZarrArray write/read roundtrip failed');
-
-    % Test ZarrArray.create with sharding
-    test_path_sharded = '/tmp/zarr_class_test_sharded';
-    if isfolder(test_path_sharded)
-        rmdir(test_path_sharded, 's');
+    methods (TestClassSetup)
+        function buildMex(~)
+            zarrBuild();
+        end
     end
 
-    arr_sharded = ZarrArray.create(test_path_sharded, [128, 128, 128], 'float32', ...
-        [32, 32, 32], 'shardShape', [64, 64, 64]);
-
-    info_sharded = arr_sharded.info();
-    assert(strcmp(info_sharded.dataType, 'float32'), ...
-        'Sharded array dataType mismatch');
-    assert(isequal(info_sharded.chunkShape, [32, 32, 32]), ...
-        'Sharded array chunkShape mismatch');
-    assert(isequal(info_sharded.shardShape, [64, 64, 64]), ...
-        'Sharded array shardShape mismatch');
-
-    % Test opening existing array
-    arr_opened = ZarrArray(test_path);
-    assert(isequal(arr_opened.shape(), [150, 120, 100]), ...
-        'Opening existing array failed');
-
-    % Test ZarrArray.create with zstd codec (simple string)
-    test_path_zstd = '/tmp/zarr_class_test_zstd';
-    if isfolder(test_path_zstd)
-        rmdir(test_path_zstd, 's');
+    methods (TestMethodSetup)
+        function cleanupTempDir(testCase)
+            if isfolder(testCase.TempDir)
+                rmdir(testCase.TempDir, 's');
+            end
+            mkdir(testCase.TempDir);
+        end
     end
-    arr_zstd = ZarrArray.create(test_path_zstd, [64, 64, 64], 'uint8', [32, 32, 32], ...
-        'codec', 'zstd');
-    test_data_zstd = uint8(randi(255, [32, 32, 32]));
-    arr_zstd.write([1, 33; 1, 33; 1, 33], test_data_zstd);
-    read_data_zstd = arr_zstd.read([1, 33; 1, 33; 1, 33]);
-    assert(isequal(test_data_zstd, read_data_zstd), ...
-        'ZarrArray with zstd codec write/read roundtrip failed');
 
-    % Test ZarrArray.create with zstd codec and configuration
-    test_path_zstd_cfg = '/tmp/zarr_class_test_zstd_cfg';
-    if isfolder(test_path_zstd_cfg)
-        rmdir(test_path_zstd_cfg, 's');
+    methods (TestMethodTeardown)
+        function removeTempDir(testCase)
+            if isfolder(testCase.TempDir)
+                rmdir(testCase.TempDir, 's');
+            end
+        end
     end
-    arr_zstd_cfg = ZarrArray.create(test_path_zstd_cfg, [64, 64, 64], 'int32', [32, 32, 32], ...
-        'codec', struct('name', 'zstd', 'configuration', struct('level', 10)));
-    test_data_zstd_cfg = int32(randi(1000000, [32, 32, 32]));
-    arr_zstd_cfg.write([1, 33; 1, 33; 1, 33], test_data_zstd_cfg);
-    read_data_zstd_cfg = arr_zstd_cfg.read([1, 33; 1, 33; 1, 33]);
-    assert(isequal(test_data_zstd_cfg, read_data_zstd_cfg), ...
-        'ZarrArray with zstd codec (configured) write/read roundtrip failed');
 
-    % Test ZarrArray.create with gzip codec
-    test_path_gzip = '/tmp/zarr_class_test_gzip';
-    if isfolder(test_path_gzip)
-        rmdir(test_path_gzip, 's');
+    methods (Test)
+        % zarrMex Tests
+
+        function testReadFromRemote(testCase)
+            bbox = [1, 2; 3074, 3075; 3074, 3075; 514, 515];
+            data = zarrMex('read', testCase.RemotePath, bbox);
+            testCase.verifyEqual(data, uint32(988274));
+        end
+
+        function testCreateArray(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'create_test');
+            json = testCase.createTestMetadataJson([100, 100, 100], 'uint32', [32, 32, 32]);
+
+            zarrMex('create', arrayPath, json);
+
+            testCase.verifyTrue(isfile(fullfile(arrayPath, 'zarr.json')));
+
+            written_json = fileread(fullfile(arrayPath, 'zarr.json'));
+            original_struct = jsondecode(json);
+            written_struct = jsondecode(written_json);
+            testCase.verifyEqual(written_struct, original_struct);
+        end
+
+        function testWriteAndRead(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'write_test');
+            json = testCase.createTestMetadataJson([100, 100, 100], 'uint32', [32, 32, 32]);
+            zarrMex('create', arrayPath, json);
+
+            data = uint32(reshape(1:1000, [10, 10, 10]));
+            bbox = [1, 11; 1, 11; 1, 11];
+
+            zarrMex('write', arrayPath, bbox, data);
+            readData = zarrMex('read', arrayPath, bbox);
+
+            testCase.verifyEqual(readData, data);
+        end
+
+        function testResize(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'resize_test');
+            json = testCase.createTestMetadataJson([100, 100, 100], 'uint32', [32, 32, 32]);
+            zarrMex('create', arrayPath, json);
+
+            newShape = [200, 150, 100];
+            zarrMex('resize', arrayPath, newShape);
+
+            resizedJson = fileread(fullfile(arrayPath, 'zarr.json'));
+            resizedStruct = jsondecode(resizedJson);
+            testCase.verifyEqual(resizedStruct.shape, newShape');
+        end
+
+        function testInfo(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'info_test');
+            json = testCase.createTestMetadataJson([100, 100, 100], 'uint32', [32, 32, 32]);
+            zarrMex('create', arrayPath, json);
+
+            info = zarrMex('info', arrayPath);
+
+            testCase.verifyEqual(info.boundingBox, [1, 101; 1, 101; 1, 101]);
+            testCase.verifyEqual(info.dataType, 'uint32');
+            testCase.verifyEqual(info.chunkShape, [32, 32, 32]);
+            testCase.verifyEqual(info.shardShape, [32, 32, 32]);
+        end
+
+        function testInfoFromRemote(testCase)
+            info = zarrMex('info', testCase.RemotePath);
+
+            testCase.verifyEqual(info.dataType, 'uint32');
+        end
+
+        % ZarrArray Class Tests
+
+        function testZarrArrayCreate(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_create');
+
+            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+
+            testCase.verifyTrue(isfile(fullfile(arrayPath, 'zarr.json')));
+
+            info = arr.info();
+            testCase.verifyEqual(info.boundingBox, [1, 101; 1, 101; 1, 101]);
+            testCase.verifyEqual(info.dataType, 'uint16');
+            testCase.verifyEqual(info.chunkShape, [32, 32, 32]);
+        end
+
+        function testZarrArrayShape(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_shape');
+            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+
+            testCase.verifyEqual(arr.shape(), [100, 100, 100]);
+        end
+
+        function testZarrArrayResize(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_resize');
+            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+
+            arr.resize([150, 120, 100]);
+
+            testCase.verifyEqual(arr.shape(), [150, 120, 100]);
+        end
+
+        function testZarrArrayWriteRead(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_write_read');
+            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+
+            testData = uint16(reshape(1:1000, [10, 10, 10]));
+            bbox = [1, 11; 1, 11; 1, 11];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testZarrArrayOpenExisting(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_open');
+            ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+
+            arr = ZarrArray(arrayPath);
+
+            testCase.verifyEqual(arr.shape(), [100, 100, 100]);
+        end
+
+        function testZarrArrayWithSharding(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_sharding');
+
+            arr = ZarrArray.create(arrayPath, [128, 128, 128], 'float32', ...
+                [32, 32, 32], 'shardShape', [64, 64, 64]);
+
+            info = arr.info();
+            testCase.verifyEqual(info.dataType, 'float32');
+            testCase.verifyEqual(info.chunkShape, [32, 32, 32]);
+            testCase.verifyEqual(info.shardShape, [64, 64, 64]);
+        end
+
+        function testZarrArrayWithZstdCodec(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_zstd');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint8', [32, 32, 32], ...
+                'codec', 'zstd');
+
+            testData = uint8(randi(255, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testZarrArrayWithZstdCodecConfigured(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_zstd_cfg');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'int32', [32, 32, 32], ...
+                'codec', struct('name', 'zstd', 'configuration', struct('level', 10)));
+
+            testData = int32(randi(1000000, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testZarrArrayWithGzipCodec(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_gzip');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'float64', [32, 32, 32], ...
+                'codec', struct('name', 'gzip', 'configuration', struct('level', 6)));
+
+            testData = rand(32, 32, 32);
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyLessThan(max(abs(testData(:) - readData(:))), 1e-10);
+        end
+
+        function testZarrArrayWithShardingAndZstd(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_shard_zstd');
+            arr = ZarrArray.create(arrayPath, [128, 128, 128], 'uint16', ...
+                [16, 16, 16], 'shardShape', [64, 64, 64], 'codec', 'zstd');
+
+            testData = uint16(randi(65535, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        % Error Tests
+
+        function testWriteWithWrongDataType(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'error_wrong_dtype');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint16', [32, 32, 32]);
+
+            % Try to write uint8 data to a uint16 array
+            wrongData = uint8(randi(255, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            testCase.verifyError(@() arr.write(bbox, wrongData), 'zarr:error');
+        end
+
+        function testReadFromNonExistentPath(testCase)
+            nonExistentPath = fullfile(testCase.TempDir, 'does_not_exist');
+
+            testCase.verifyError(@() zarrMex('read', nonExistentPath, [1, 2; 1, 2; 1, 2]), 'zarr:error');
+        end
+
+        function testCreateWithMismatchedDimensions(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'error_dim_mismatch');
+
+            % Shape has 3 dimensions but chunk shape has 2
+            json = jsonencode(struct( ...
+                'zarr_format', 3, ...
+                'node_type', 'array', ...
+                'shape', [100, 100, 100], ...
+                'data_type', 'uint32', ...
+                'chunk_grid', struct( ...
+                    'name', 'regular', ...
+                    'configuration', struct('chunk_shape', [32, 32]) ...
+                ), ...
+                'chunk_key_encoding', struct( ...
+                    'name', 'default', ...
+                    'configuration', struct('separator', '/') ...
+                ), ...
+                'fill_value', 0, ...
+                'codecs', {{ struct('name', 'bytes', 'configuration', struct('endian', 'little')) }} ...
+            ));
+
+            testCase.verifyError(@() zarrMex('create', arrayPath, json), 'zarr:error');
+        end
+
+        function testInfoFromNonExistentPath(testCase)
+            nonExistentPath = fullfile(testCase.TempDir, 'info_does_not_exist');
+
+            testCase.verifyError(@() zarrMex('info', nonExistentPath), 'zarr:error');
+        end
+
+        function testWriteOutOfBounds(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'error_out_of_bounds');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint32', [32, 32, 32]);
+
+            data = uint32(ones(32, 32, 32));
+            % Bounding box extends beyond array shape
+            bbox = [50, 82; 1, 33; 1, 33];
+
+            testCase.verifyError(@() arr.write(bbox, data), 'zarr:error');
+        end
     end
-    arr_gzip = ZarrArray.create(test_path_gzip, [64, 64, 64], 'float64', [32, 32, 32], ...
-        'codec', struct('name', 'gzip', 'configuration', struct('level', 6)));
-    test_data_gzip = rand(32, 32, 32);
-    arr_gzip.write([1, 33; 1, 33; 1, 33], test_data_gzip);
-    read_data_gzip = arr_gzip.read([1, 33; 1, 33; 1, 33]);
-    assert(max(abs(test_data_gzip(:) - read_data_gzip(:))) < 1e-10, ...
-        'ZarrArray with gzip codec write/read roundtrip failed');
 
-    % Test ZarrArray.create with sharding and zstd codec
-    test_path_shard_zstd = '/tmp/zarr_class_test_shard_zstd';
-    if isfolder(test_path_shard_zstd)
-        rmdir(test_path_shard_zstd, 's');
+    methods (Static, Access = private)
+        function json = createTestMetadataJson(shape, dataType, chunkShape)
+            json = jsonencode(struct( ...
+                'zarr_format', 3, ...
+                'node_type', 'array', ...
+                'shape', shape, ...
+                'data_type', dataType, ...
+                'chunk_grid', struct( ...
+                    'name', 'regular', ...
+                    'configuration', struct('chunk_shape', chunkShape) ...
+                ), ...
+                'chunk_key_encoding', struct( ...
+                    'name', 'default', ...
+                    'configuration', struct('separator', '/') ...
+                ), ...
+                'fill_value', 0, ...
+                'codecs', {{ struct( ...
+                    'name', 'sharding_indexed', ...
+                    'configuration', struct( ...
+                        'chunk_shape', chunkShape, ...
+                        'codecs', {{ struct('name', 'bytes', 'configuration', struct('endian', 'little')) }}, ...
+                        'index_location', 'end', ...
+                        'index_codecs', {{ ...
+                            struct('name', 'bytes', 'configuration', struct('endian', 'little')), ...
+                            struct('name', 'crc32c') ...
+                        }} ...
+                    )) ...
+                }} ...
+            ));
+        end
     end
-    arr_shard_zstd = ZarrArray.create(test_path_shard_zstd, [128, 128, 128], 'uint16', ...
-        [16, 16, 16], 'shardShape', [64, 64, 64], 'codec', 'zstd');
-    test_data_shard = uint16(randi(65535, [32, 32, 32]));
-    arr_shard_zstd.write([1, 33; 1, 33; 1, 33], test_data_shard);
-    read_data_shard = arr_shard_zstd.read([1, 33; 1, 33; 1, 33]);
-    assert(isequal(test_data_shard, read_data_shard), ...
-        'ZarrArray with sharding and zstd codec write/read roundtrip failed');
-
-    disp('All ZarrArray class tests passed!');
 end

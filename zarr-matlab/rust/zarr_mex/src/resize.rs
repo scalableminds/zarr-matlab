@@ -1,8 +1,5 @@
 use zarrs::array::{Array, ArrayMetadataOptions};
 
-use std::path::PathBuf;
-use std::sync::Arc;
-
 use crate::ffi::*;
 use crate::util::*;
 
@@ -17,7 +14,7 @@ pub(crate) fn resize(rhs: &[MxArray]) -> Result<()> {
     let store_str = rhs[0];
     let shape_arr = rhs[1];
 
-    let store_path: PathBuf = mx_array_to_str(store_str)?.into();
+    let path = mx_array_to_str(store_str)?;
 
     // Parse shape from MATLAB array
     let shape_f64 = mx_array_to_f64_slice(shape_arr)?;
@@ -27,10 +24,8 @@ pub(crate) fn resize(rhs: &[MxArray]) -> Result<()> {
         .collect::<Result<Vec<u64>>>()?;
 
     // Open the array
-    let store: zarrs::storage::ReadableWritableListableStorage = Arc::new(
-        zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?,
-    );
-    let mut array = zarrs_result_to_str_error(Array::open(store.clone(), "/"))?;
+    let store = create_writable_store(path)?;
+    let mut array = zarrs_result_to_str_error(Array::open(store, "/"))?;
 
     // Resize the array
     zarrs_result_to_str_error(array.set_shape(new_shape))?;

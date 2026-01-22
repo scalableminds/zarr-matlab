@@ -1,8 +1,6 @@
 use zarrs::array::Array;
 
 use std::ffi::CString;
-use std::path::PathBuf;
-use std::sync::Arc;
 
 use crate::ffi::*;
 use crate::util::*;
@@ -31,13 +29,11 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
     }
 
     let store_str = rhs[0];
-    let store_path: PathBuf = mx_array_to_str(store_str)?.into();
+    let path = mx_array_to_str(store_str)?;
 
     // Open the array
-    let store: zarrs::storage::ReadableWritableListableStorage = Arc::new(
-        zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?,
-    );
-    let array = zarrs_result_to_str_error(Array::open(store.clone(), "/"))?;
+    let store = create_readable_store(path)?;
+    let array = zarrs_result_to_str_error(Array::open(store, "/"))?;
 
     let shape = array.shape();
     let ndim = shape.len();
