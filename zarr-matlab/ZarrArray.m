@@ -21,11 +21,12 @@ classdef ZarrArray < handle
             %     chunkShape - Chunk shape as a vector, e.g. [32, 32, 32]
             %                  Default: min(shape, 100) per dimension
             %     shardShape - Shard shape for sharded arrays (enables sharding codec)
-            %     codec      - Compression codec, can be:
-            %                  - String: 'zstd', 'gzip', 'blosc'
+            %     codec      - Compression codec (default: 'zstd'), can be:
+            %                  - String: 'zstd', 'gzip', 'blosc', or 'none' to disable
             %                  - Struct with 'name' and optional 'configuration' fields
             %                  Examples:
             %                    'zstd'
+            %                    'none'  % disable compression
             %                    struct('name', 'zstd', 'configuration', struct('level', 5))
             %                    struct('name', 'gzip', 'configuration', struct('level', 6))
             %                    struct('name', 'blosc', 'configuration', struct( ...
@@ -34,7 +35,7 @@ classdef ZarrArray < handle
             p = inputParser;
             addParameter(p, 'chunkShape', [], @isnumeric);
             addParameter(p, 'shardShape', [], @isnumeric);
-            addParameter(p, 'codec', '', @(x) ischar(x) || isstruct(x));
+            addParameter(p, 'codec', 'zstd', @(x) ischar(x) || isstruct(x));
             parse(p, varargin{:});
 
             chunkShape = p.Results.chunkShape;
@@ -116,7 +117,7 @@ classdef ZarrArray < handle
             %     chunkShape - Chunk shape as a vector, e.g. [32, 32, 32]
             %                  Default: min(shape, 100) per dimension
             %     shardShape - Shard shape for sharded arrays (enables sharding codec)
-            %     codec      - Compression codec ('zstd', 'gzip', 'blosc' or struct)
+            %     codec      - Compression codec (default: 'zstd', use 'none' to disable)
             %
             %   Example:
             %     data = uint16(rand(100, 100, 100) * 65535);
@@ -159,7 +160,8 @@ classdef ZarrArray < handle
         function codec = buildCodec(codecParam, dataType)
             % BUILDCODEC Build a codec struct from string or struct input
             %   Adds default configuration for compression codecs if not provided
-            if isempty(codecParam)
+            %   Use 'none' to explicitly disable compression
+            if isempty(codecParam) || (ischar(codecParam) && strcmp(codecParam, 'none'))
                 codec = [];
                 return;
             end

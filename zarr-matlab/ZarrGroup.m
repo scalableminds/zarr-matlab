@@ -155,7 +155,7 @@ classdef ZarrGroup < handle
             %   Optional Name-Value Arguments:
             %     chunkShape - Chunk shape as a vector (default: min(shape, 100))
             %     shardShape - Shard shape for sharded arrays
-            %     codec      - Compression codec
+            %     codec      - Compression codec (default: 'zstd', use 'none' to disable)
             %
             %   Returns:
             %     arr - ZarrArray object for the new array
@@ -181,7 +181,7 @@ classdef ZarrGroup < handle
             %   Optional Name-Value Arguments:
             %     chunkShape - Chunk shape as a vector (default: min(shape, 100))
             %     shardShape - Shard shape for sharded arrays
-            %     codec      - Compression codec
+            %     codec      - Compression codec (default: 'zstd', use 'none' to disable)
             %
             %   Returns:
             %     arr - ZarrArray object for the new array

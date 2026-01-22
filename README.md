@@ -18,8 +18,8 @@ arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', 'chunkShape'
 arr = ZarrArray.create('/path/to/array', [256, 256, 256], 'uint16', ...
     'chunkShape', [32, 32, 32], 'shardShape', [128, 128, 128]);
 
-% Create with compression
-arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', 'codec', 'zstd');
+% Create without compression (zstd is the default)
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', 'codec', 'none');
 
 % Create with compression and custom configuration
 arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'float32', ...
@@ -33,9 +33,9 @@ Create an array from existing data (shape and data type are inferred):
 data = uint16(rand(100, 100, 100) * 65535);
 arr = ZarrArray.createFromData('/path/to/array', data);
 
-% Create from data with compression
+% Create from data with gzip instead of default zstd
 data = rand(64, 64, 64);  % double -> float64
-arr = ZarrArray.createFromData('/path/to/array', data, 'codec', 'zstd');
+arr = ZarrArray.createFromData('/path/to/array', data, 'codec', 'gzip');
 
 % Create from data with explicit chunk shape
 arr = ZarrArray.createFromData('/path/to/array', data, 'chunkShape', [32, 32, 32], 'codec', 'zstd');
@@ -43,7 +43,7 @@ arr = ZarrArray.createFromData('/path/to/array', data, 'chunkShape', [32, 32, 32
 
 Notes:
 - Supported data types: `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`
-- Supported compression codecs: `zstd`, `gzip`, `blosc`
+- Compression codecs: `zstd` (default), `gzip`, `blosc`, or `none` to disable compression
 - All arrays are created with the `transpose` codec to represent Fortran-order arrays.
 
 Open an existing array and read/write data:
