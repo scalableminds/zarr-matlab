@@ -1,4 +1,4 @@
-use zarrs::array::Array;
+use zarrs::array::{Array, ArrayMetadataOptions};
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -36,7 +36,11 @@ pub(crate) fn resize(rhs: &[MxArray]) -> Result<()> {
     zarrs_result_to_str_error(array.set_shape(new_shape))?;
 
     // Store the updated metadata
-    zarrs_result_to_str_error(array.store_metadata())?;
+    zarrs_result_to_str_error(
+        array.store_metadata_opt(
+            &ArrayMetadataOptions::default().with_include_zarrs_metadata(false),
+        ),
+    )?;
 
     Ok(())
 }

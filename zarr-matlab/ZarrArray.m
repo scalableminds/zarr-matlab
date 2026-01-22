@@ -47,7 +47,7 @@ classdef ZarrArray < handle
             transposeCodec = ZarrArray.buildTransposeCodec(ndim);
 
             % Build compression codec if specified
-            compressionCodec = ZarrArray.buildCodec(codecParam);
+            compressionCodec = ZarrArray.buildCodec(codecParam, dataType);
 
             % Build the bytes codec with endian configuration if needed
             bytesCodec = ZarrArray.buildBytesCodec(dataType);
@@ -67,7 +67,9 @@ classdef ZarrArray < handle
                         'chunk_shape', chunkShape, ...
                         'codecs', innerCodecs, ...
                         'index_location', 'end', ...
-                        'index_codecs', {{ struct('name', 'bytes'), struct('name', 'crc32c') }} ...
+                        'index_codecs', {{ ...
+                            struct('name', 'bytes', 'configuration', struct('endian', 'little')), ...
+                            struct('name', 'crc32c') }} ...
                     )) }};
                 gridChunkShape = shardShape;
             else
@@ -98,8 +100,9 @@ classdef ZarrArray < handle
     end
 
     methods (Static, Access = private)
-        function codec = buildCodec(codecParam)
+        function codec = buildCodec(codecParam, dataType)
             % BUILDCODEC Build a codec struct from string or struct input
+            %   Adds default configuration for compression codecs if not provided
             if isempty(codecParam)
                 codec = [];
                 return;
@@ -107,15 +110,63 @@ classdef ZarrArray < handle
 
             if ischar(codecParam)
                 % Simple string like 'zstd', 'gzip', 'blosc'
-                codec = struct('name', codecParam);
+                name = codecParam;
+                config = [];
             elseif isstruct(codecParam)
                 % Struct with name and optional configuration
                 if ~isfield(codecParam, 'name')
                     error('Codec struct must have a ''name'' field');
                 end
-                codec = codecParam;
+                name = codecParam.name;
+                if isfield(codecParam, 'configuration')
+                    config = codecParam.configuration;
+                else
+                    config = [];
+                end
             else
                 error('Codec must be a string or struct');
+            end
+
+            % Add default configuration if not provided
+            if isempty(config)
+                config = ZarrArray.getDefaultCodecConfig(name, dataType);
+            end
+
+            if isempty(config)
+                codec = struct('name', name);
+            else
+                codec = struct('name', name, 'configuration', config);
+            end
+        end
+
+        function config = getDefaultCodecConfig(codecName, dataType)
+            % GETDEFAULTCODECCONFIG Get default configuration for a codec
+            switch codecName
+                case 'zstd'
+                    config = struct('level', 3);
+                case 'gzip'
+                    config = struct('level', 5);
+                case 'blosc'
+                    typesize = ZarrArray.getTypeSize(dataType);
+                    config = struct('cname', 'lz4', 'clevel', 5, 'shuffle', 'noshuffle', 'typesize', typesize, 'blocksize', 0);
+                otherwise
+                    config = [];
+            end
+        end
+
+        function size = getTypeSize(dataType)
+            % GETTYPESIZE Get the size in bytes for a data type
+            switch dataType
+                case {'uint8', 'int8'}
+                    size = 1;
+                case {'uint16', 'int16'}
+                    size = 2;
+                case {'uint32', 'int32', 'float32'}
+                    size = 4;
+                case {'uint64', 'int64', 'float64'}
+                    size = 8;
+                otherwise
+                    size = 1;
             end
         end
 

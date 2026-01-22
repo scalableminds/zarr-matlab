@@ -1,6 +1,4 @@
-use zarrs::array::Array;
-use zarrs::array::ArrayMetadataOptions;
-use zarrs::array::ArrayMetadataV3;
+use zarrs::array::{Array, ArrayMetadataOptions, ArrayMetadataV3};
 
 use std::path::PathBuf;
 use std::sync::Arc;
