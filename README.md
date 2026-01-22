@@ -26,7 +26,9 @@ arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'float32', [32, 32, 32
 
 Supported data types: `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`
 
-Supported codecs: `zstd`, `gzip`, `blosc`
+Supported compression codecs: `zstd`, `gzip`, `blosc`
+
+Note that all new ZarrArrays are created with the `transpose` codec to represent Fortran-order arrays.
 
 Open an existing array and read/write data:
 
