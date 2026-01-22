@@ -25,7 +25,7 @@ jobs:
       - name: Run zarrTest
         uses: matlab-actions/run-tests@v2
         with:
-          source-folder: zarr-matlab
+          source-folder: zarr-matlab/tests
 
       - uses: actions/upload-artifact@v4
         with:
