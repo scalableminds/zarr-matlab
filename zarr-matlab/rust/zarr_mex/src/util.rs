@@ -1,6 +1,7 @@
 use ffi::*;
 
 use std;
+use std::convert::TryInto;
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
 use std::slice;
@@ -8,7 +9,7 @@ use std::sync::Arc;
 
 use zarrs::array::data_type::DataType;
 use zarrs::array_subset::ArraySubset;
-use zarrs::storage::{ReadableStorage, ReadableWritableListableStorage};
+use zarrs::storage::{ReadableStorage, ReadableWritableListableStorage, StoreKey};
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -353,15 +354,29 @@ pub fn is_http_url(path: &str) -> bool {
 }
 
 pub fn create_readable_store(path: &str) -> Result<ReadableStorage> {
-    if is_http_url(path) {
+    let store: ReadableStorage = if is_http_url(path) {
         let store = zarrs_result_to_str_error(zarrs_http::HTTPStore::new(path))?;
-        Ok(Arc::new(store))
+        Arc::new(store)
     } else {
         let store_path: PathBuf = path.into();
         let store =
             zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?;
-        Ok(Arc::new(store))
-    }
+        Arc::new(store)
+    };
+
+    // Check if zarr.json exists
+    let store_key = zarrs_result_to_str_error(StoreKey::new("zarr.json"))?;
+    match store.get(&store_key) {
+        Ok(Some(_)) => {}
+        _ => {
+            return Err(format!(
+                "No zarr.json found at '{}'. Not a valid Zarr v3 array.",
+                path
+            ));
+        }
+    };
+
+    Ok(store)
 }
 
 pub fn create_writable_store(path: &str) -> Result<ReadableWritableListableStorage> {
