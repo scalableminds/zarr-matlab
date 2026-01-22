@@ -8,7 +8,7 @@ A Zarr v3 implementation based on [zarrs](https://zarrs.dev) for MATLAB.
 Create a new array:
 
 ```matlab
-% Create with default chunk shape (min(shape, 100) per dimension)
+% Create with default options
 arr = ZarrArray.create('/path/to/array', [200, 200, 200], 'uint16');
 
 % Create with explicit chunk shape
@@ -29,7 +29,7 @@ arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'float32', ...
 Create an array from existing data (shape and data type are inferred):
 
 ```matlab
-% Create from existing MATLAB array (default chunk shape)
+% Create from existing MATLAB array
 data = uint16(rand(100, 100, 100) * 65535);
 arr = ZarrArray.createFromData('/path/to/array', data);
 
@@ -53,7 +53,7 @@ Open an existing array and read/write data:
 arr = ZarrArray('/path/to/array');
 
 % Get array info
-info = arr.info();   % Returns struct with boundingBox, dataType, chunkShape, shardShape
+info = arr.info();   % Returns struct with shape, dataType, chunkShape, shardShape
 shape = arr.shape(); % Returns shape as vector
 
 % Read data (bounding box is [start, end] for each dimension, 1-indexed)
@@ -80,12 +80,12 @@ root = ZarrGroup.create('/path/to/dataset');
 segmentation = root.createGroup('segmentation');
 raw = root.createGroup('raw');
 
-% Create arrays within groups (chunkShape is optional, defaults to min(shape, 100))
+% Create arrays within groups
 seg_data = segmentation.createArray('data', [1000, 1000, 500], 'uint32', ...
     'chunkShape', [64, 64, 64], 'shardShape', [256, 256, 256], 'codec', 'zstd');
 raw_data = raw.createArray('data', [1000, 1000, 500], 'uint8');
 
-% Create array from existing data (shape, type, and chunkShape inferred)
+% Create array from existing data
 data = uint16(rand(100, 100, 50) * 65535);
 arr = root.createArrayFromData('processed', data, 'codec', 'zstd');
 

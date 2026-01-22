@@ -37,7 +37,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyTrue(isfile(fullfile(arrayPath, 'zarr.json')));
 
             info = arr.info();
-            testCase.verifyEqual(info.boundingBox, [1, 101; 1, 101; 1, 101]);
+            testCase.verifyEqual(info.shape, [100, 100, 100]);
             testCase.verifyEqual(info.dataType, 'uint16');
             testCase.verifyEqual(info.chunkShape, [32, 32, 32]);
         end

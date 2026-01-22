@@ -38,19 +38,8 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
     let shape = array.shape();
     let ndim = shape.len();
 
-    // Create the boundingBox matrix (ndim x 2)
-    let bbox_dims: [u64; 2] = [ndim as u64, 2];
-    let bbox_arr = create_numeric_array(&bbox_dims, MxClassId::Double, MxComplexity::Real)?;
-    let bbox_ptr = unsafe { mxGetPr(bbox_arr) };
-    if bbox_ptr.is_null() {
-        return Err("Failed to get pointer to bounding box array".to_string());
-    }
-    unsafe {
-        for i in 0..ndim {
-            *bbox_ptr.add(i) = 1.0;
-            *bbox_ptr.add(ndim + i) = (shape[i] + 1) as f64;
-        }
-    }
+    // Create the shape vector
+    let shape_arr = create_double_vector(&shape)?;
 
     // Get data type as string
     let data_type_str = format!("{}", array.data_type());
@@ -83,13 +72,13 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
     };
 
     // Create field names
-    let field_bbox = CString::new("boundingBox").unwrap();
+    let field_shape = CString::new("shape").unwrap();
     let field_dtype = CString::new("dataType").unwrap();
     let field_chunk = CString::new("chunkShape").unwrap();
     let field_shard = CString::new("shardShape").unwrap();
 
     let field_names: [*const c_char; 4] = [
-        field_bbox.as_ptr(),
+        field_shape.as_ptr(),
         field_dtype.as_ptr(),
         field_chunk.as_ptr(),
         field_shard.as_ptr(),
@@ -102,7 +91,7 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
 
     // Set fields
     unsafe {
-        mxSetField(result_struct, 0, field_bbox.as_ptr(), bbox_arr);
+        mxSetField(result_struct, 0, field_shape.as_ptr(), shape_arr);
         mxSetField(result_struct, 0, field_dtype.as_ptr(), data_type_arr);
 
         match inner_chunk_shape {

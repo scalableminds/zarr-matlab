@@ -270,7 +270,7 @@ classdef ZarrArray < handle
             %   info = arr.info()
             %
             %   Returns a struct with fields:
-            %     boundingBox - nx2 matrix with [start, end] for each dimension
+            %     shape       - Array shape as a vector
             %     dataType    - Data type string
             %     chunkShape  - Chunk shape vector
             %     shardShape  - Shard shape vector (same as chunkShape if not sharded)
@@ -283,7 +283,7 @@ classdef ZarrArray < handle
             %   shape = arr.shape()
 
             info = obj.info();
-            shape = (info.boundingBox(:, 2) - info.boundingBox(:, 1))';
+            shape = info.shape;
         end
 
         function resize(obj, newShape)

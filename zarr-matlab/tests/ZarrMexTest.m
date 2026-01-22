@@ -84,7 +84,7 @@ classdef ZarrMexTest < matlab.unittest.TestCase
 
             info = zarrMex('info', arrayPath);
 
-            testCase.verifyEqual(info.boundingBox, [1, 101; 1, 101; 1, 101]);
+            testCase.verifyEqual(info.shape, [100, 100, 100]);
             testCase.verifyEqual(info.dataType, 'uint32');
             testCase.verifyEqual(info.chunkShape, [32, 32, 32]);
             testCase.verifyEqual(info.shardShape, [32, 32, 32]);
