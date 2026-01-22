@@ -75,7 +75,7 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             groupPath = fullfile(testCase.TempDir, 'group_with_array');
             grp = ZarrGroup.create(groupPath);
 
-            arr = grp.createArray('data', [64, 64, 64], 'uint16', [32, 32, 32]);
+            arr = grp.createArray('data', [64, 64, 64], 'uint16', 'chunkShape', [32, 32, 32]);
 
             testCase.verifyTrue(isfile(fullfile(groupPath, 'data', 'zarr.json')));
             testCase.verifyEqual(arr.shape(), [64, 64, 64]);
@@ -84,7 +84,7 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
         function testOpenArray(testCase)
             groupPath = fullfile(testCase.TempDir, 'group_open_array');
             grp = ZarrGroup.create(groupPath);
-            grp.createArray('myarray', [32, 32, 32], 'float32', [16, 16, 16]);
+            grp.createArray('myarray', [32, 32, 32], 'float32', 'chunkShape', [16, 16, 16]);
 
             arr = grp.openArray('myarray');
 
@@ -96,7 +96,7 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             grp = ZarrGroup.create(groupPath);
 
             testData = uint32(randi(1000000, [40, 30, 20]));
-            arr = grp.createArrayFromData('mydata', testData, [16, 16, 16], 'codec', 'zstd');
+            arr = grp.createArrayFromData('mydata', testData, 'chunkShape', [16, 16, 16], 'codec', 'zstd');
 
             testCase.verifyTrue(isfile(fullfile(groupPath, 'mydata', 'zarr.json')));
             testCase.verifyEqual(arr.shape(), [40, 30, 20]);
@@ -114,7 +114,7 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             grp = ZarrGroup.create(groupPath);
             grp.createGroup('subgroup1');
             grp.createGroup('subgroup2');
-            grp.createArray('array1', [10, 10], 'uint8', [10, 10]);
+            grp.createArray('array1', [10, 10], 'uint8', 'chunkShape', [10, 10]);
 
             names = grp.list();
 
@@ -126,8 +126,8 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             grp = ZarrGroup.create(groupPath);
             grp.createGroup('group_a');
             grp.createGroup('group_b');
-            grp.createArray('array_x', [10, 10], 'uint8', [10, 10]);
-            grp.createArray('array_y', [20, 20], 'uint16', [10, 10]);
+            grp.createArray('array_x', [10, 10], 'uint8', 'chunkShape', [10, 10]);
+            grp.createArray('array_y', [20, 20], 'uint16', 'chunkShape', [10, 10]);
 
             [groups, arrays] = grp.listContents();
 
@@ -141,7 +141,7 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
 
             level1 = root.createGroup('level1');
             level2 = level1.createGroup('level2');
-            arr = level2.createArray('deep_array', [8, 8, 8], 'int32', [8, 8, 8]);
+            arr = level2.createArray('deep_array', [8, 8, 8], 'int32', 'chunkShape', [8, 8, 8]);
 
             % Write and read through the nested structure
             testData = int32(reshape(1:512, [8, 8, 8]));
@@ -168,7 +168,7 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
 
         function testOpenArrayAsGroup(testCase)
             arrayPath = fullfile(testCase.TempDir, 'array_not_group');
-            ZarrArray.create(arrayPath, [10, 10], 'uint8', [10, 10]);
+            ZarrArray.create(arrayPath, [10, 10], 'uint8', 'chunkShape', [10, 10]);
 
             testCase.verifyError(@() ZarrGroup(arrayPath), 'zarr:error');
         end
@@ -216,7 +216,7 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             grp = ZarrGroup(testCase.RemoteGroupPath);
 
             testCase.verifyError(@() grp.createGroup('newgroup'), 'zarr:error');
-            testCase.verifyError(@() grp.createArray('newarray', [10, 10], 'uint8', [10, 10]), 'zarr:error');
+            testCase.verifyError(@() grp.createArray('newarray', [10, 10], 'uint8'), 'zarr:error');
         end
     end
 end

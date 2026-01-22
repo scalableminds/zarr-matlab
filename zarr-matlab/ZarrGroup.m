@@ -141,19 +141,19 @@ classdef ZarrGroup < handle
             arr = ZarrArray(subpath);
         end
 
-        function arr = createArray(obj, name, shape, dataType, chunkShape, varargin)
+        function arr = createArray(obj, name, shape, dataType, varargin)
             % CREATEARRAY Create a new array within this group
-            %   arr = grp.createArray(name, shape, dataType, chunkShape)
-            %   arr = grp.createArray(name, shape, dataType, chunkShape, 'shardShape', shardShape)
-            %   arr = grp.createArray(name, shape, dataType, chunkShape, 'codec', 'zstd')
+            %   arr = grp.createArray(name, shape, dataType)
+            %   arr = grp.createArray(name, shape, dataType, 'chunkShape', [32, 32, 32])
+            %   arr = grp.createArray(name, shape, dataType, 'codec', 'zstd')
             %
             %   Arguments:
-            %     name       - Name of the array to create
-            %     shape      - Array shape as a vector
-            %     dataType   - Data type string
-            %     chunkShape - Chunk shape as a vector
+            %     name     - Name of the array to create
+            %     shape    - Array shape as a vector
+            %     dataType - Data type string
             %
             %   Optional Name-Value Arguments:
+            %     chunkShape - Chunk shape as a vector (default: min(shape, 100))
             %     shardShape - Shard shape for sharded arrays
             %     codec      - Compression codec
             %
@@ -165,21 +165,21 @@ classdef ZarrGroup < handle
             end
 
             subpath = fullfile(obj.path, name);
-            arr = ZarrArray.create(subpath, shape, dataType, chunkShape, varargin{:});
+            arr = ZarrArray.create(subpath, shape, dataType, varargin{:});
         end
 
-        function arr = createArrayFromData(obj, name, data, chunkShape, varargin)
+        function arr = createArrayFromData(obj, name, data, varargin)
             % CREATEARRAYFROMDATA Create a new array from existing data within this group
-            %   arr = grp.createArrayFromData(name, data, chunkShape)
-            %   arr = grp.createArrayFromData(name, data, chunkShape, 'shardShape', shardShape)
-            %   arr = grp.createArrayFromData(name, data, chunkShape, 'codec', 'zstd')
+            %   arr = grp.createArrayFromData(name, data)
+            %   arr = grp.createArrayFromData(name, data, 'chunkShape', [32, 32, 32])
+            %   arr = grp.createArrayFromData(name, data, 'codec', 'zstd')
             %
             %   Arguments:
-            %     name       - Name of the array to create
-            %     data       - MATLAB array to store (data type and shape are inferred)
-            %     chunkShape - Chunk shape as a vector
+            %     name - Name of the array to create
+            %     data - MATLAB array to store (data type and shape are inferred)
             %
             %   Optional Name-Value Arguments:
+            %     chunkShape - Chunk shape as a vector (default: min(shape, 100))
             %     shardShape - Shard shape for sharded arrays
             %     codec      - Compression codec
             %
@@ -191,7 +191,7 @@ classdef ZarrGroup < handle
             end
 
             subpath = fullfile(obj.path, name);
-            arr = ZarrArray.createFromData(subpath, data, chunkShape, varargin{:});
+            arr = ZarrArray.createFromData(subpath, data, varargin{:});
         end
 
         function names = list(obj)

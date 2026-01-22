@@ -32,7 +32,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
         function testCreate(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_create');
 
-            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', 'chunkShape', [32, 32, 32]);
 
             testCase.verifyTrue(isfile(fullfile(arrayPath, 'zarr.json')));
 
@@ -42,16 +42,37 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(info.chunkShape, [32, 32, 32]);
         end
 
+        function testCreateWithDefaultChunkShape(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'default_chunk');
+
+            % Create without specifying chunkShape - should default to min(shape, 100)
+            arr = ZarrArray.create(arrayPath, [200, 50, 150], 'uint8');
+
+            info = arr.info();
+            testCase.verifyEqual(info.chunkShape, [100, 50, 100]);
+        end
+
+        function testCreateFromDataWithDefaultChunkShape(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'from_data_default_chunk');
+
+            data = uint32(randi(1000, [80, 120, 60]));
+            arr = ZarrArray.createFromData(arrayPath, data);
+
+            info = arr.info();
+            testCase.verifyEqual(info.chunkShape, [80, 100, 60]);
+            testCase.verifyEqual(arr.shape(), [80, 120, 60]);
+        end
+
         function testShape(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_shape');
-            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', 'chunkShape', [32, 32, 32]);
 
             testCase.verifyEqual(arr.shape(), [100, 100, 100]);
         end
 
         function testResize(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_resize');
-            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', 'chunkShape', [32, 32, 32]);
 
             arr.resize([150, 120, 100]);
 
@@ -60,7 +81,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
 
         function testWriteRead(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_write_read');
-            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+            arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', 'chunkShape', [32, 32, 32]);
 
             testData = uint16(reshape(1:1000, [10, 10, 10]));
             bbox = [1, 11; 1, 11; 1, 11];
@@ -73,7 +94,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
 
         function testOpenExisting(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_open');
-            ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', [32, 32, 32]);
+            ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', 'chunkShape', [32, 32, 32]);
 
             arr = ZarrArray(arrayPath);
 
@@ -84,7 +105,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             arrayPath = fullfile(testCase.TempDir, 'class_sharding');
 
             arr = ZarrArray.create(arrayPath, [128, 128, 128], 'float32', ...
-                [32, 32, 32], 'shardShape', [64, 64, 64]);
+                'chunkShape', [32, 32, 32], 'shardShape', [64, 64, 64]);
 
             info = arr.info();
             testCase.verifyEqual(info.dataType, 'float32');
@@ -94,8 +115,8 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
 
         function testWithZstdCodec(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_zstd');
-            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint8', [32, 32, 32], ...
-                'codec', 'zstd');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint8', ...
+                'chunkShape', [32, 32, 32], 'codec', 'zstd');
 
             testData = uint8(randi(255, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
@@ -108,8 +129,8 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
 
         function testWithZstdCodecConfigured(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_zstd_cfg');
-            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'int32', [32, 32, 32], ...
-                'codec', struct('name', 'zstd', 'configuration', struct('level', 10)));
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'int32', ...
+                'chunkShape', [32, 32, 32], 'codec', struct('name', 'zstd', 'configuration', struct('level', 10)));
 
             testData = int32(randi(1000000, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
@@ -122,8 +143,8 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
 
         function testWithGzipCodec(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_gzip');
-            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'float64', [32, 32, 32], ...
-                'codec', struct('name', 'gzip', 'configuration', struct('level', 6)));
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'float64', ...
+                'chunkShape', [32, 32, 32], 'codec', struct('name', 'gzip', 'configuration', struct('level', 6)));
 
             testData = rand(32, 32, 32);
             bbox = [1, 33; 1, 33; 1, 33];
@@ -137,7 +158,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
         function testWithShardingAndZstd(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_shard_zstd');
             arr = ZarrArray.create(arrayPath, [128, 128, 128], 'uint16', ...
-                [16, 16, 16], 'shardShape', [64, 64, 64], 'codec', 'zstd');
+                'chunkShape', [16, 16, 16], 'shardShape', [64, 64, 64], 'codec', 'zstd');
 
             testData = uint16(randi(65535, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
@@ -152,7 +173,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             arrayPath = fullfile(testCase.TempDir, 'from_data');
             testData = uint16(randi(65535, [50, 40, 30]));
 
-            arr = ZarrArray.createFromData(arrayPath, testData, [16, 16, 16]);
+            arr = ZarrArray.createFromData(arrayPath, testData, 'chunkShape', [16, 16, 16]);
 
             testCase.verifyEqual(arr.shape(), [50, 40, 30]);
             info = arr.info();
@@ -167,7 +188,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             arrayPath = fullfile(testCase.TempDir, 'from_data_zstd');
             testData = single(rand(32, 32, 32));
 
-            arr = ZarrArray.createFromData(arrayPath, testData, [16, 16, 16], 'codec', 'zstd');
+            arr = ZarrArray.createFromData(arrayPath, testData, 'chunkShape', [16, 16, 16], 'codec', 'zstd');
 
             info = arr.info();
             testCase.verifyEqual(info.dataType, 'float32');
@@ -181,7 +202,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             arrayPath = fullfile(testCase.TempDir, 'from_data_double');
             testData = rand(20, 20, 20);  % double by default
 
-            arr = ZarrArray.createFromData(arrayPath, testData, [10, 10, 10]);
+            arr = ZarrArray.createFromData(arrayPath, testData, 'chunkShape', [10, 10, 10]);
 
             info = arr.info();
             testCase.verifyEqual(info.dataType, 'float64');
@@ -195,7 +216,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
 
         function testWriteWithWrongDataType(testCase)
             arrayPath = fullfile(testCase.TempDir, 'error_wrong_dtype');
-            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint16', [32, 32, 32]);
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint16', 'chunkShape', [32, 32, 32]);
 
             % Try to write uint8 data to a uint16 array
             wrongData = uint8(randi(255, [32, 32, 32]));
@@ -206,7 +227,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
 
         function testWriteOutOfBounds(testCase)
             arrayPath = fullfile(testCase.TempDir, 'error_out_of_bounds');
-            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint32', [32, 32, 32]);
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint32', 'chunkShape', [32, 32, 32]);
 
             data = uint32(ones(32, 32, 32));
             % Bounding box extends beyond array shape

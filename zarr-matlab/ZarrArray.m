@@ -4,20 +4,22 @@ classdef ZarrArray < handle
     end
 
     methods (Static)
-        function arr = create(path, shape, dataType, chunkShape, varargin)
+        function arr = create(path, shape, dataType, varargin)
             % CREATE Create a new Zarr array
-            %   arr = ZarrArray.create(path, shape, dataType, chunkShape)
-            %   arr = ZarrArray.create(path, shape, dataType, chunkShape, 'shardShape', shardShape)
-            %   arr = ZarrArray.create(path, shape, dataType, chunkShape, 'codec', 'zstd')
+            %   arr = ZarrArray.create(path, shape, dataType)
+            %   arr = ZarrArray.create(path, shape, dataType, 'chunkShape', [32, 32, 32])
+            %   arr = ZarrArray.create(path, shape, dataType, 'shardShape', [128, 128, 128])
+            %   arr = ZarrArray.create(path, shape, dataType, 'codec', 'zstd')
             %
             %   Arguments:
             %     path       - Path where the array will be created
             %     shape      - Array shape as a vector, e.g. [100, 100, 100]
             %     dataType   - Data type string: 'uint8', 'uint16', 'uint32', 'uint64',
             %                  'int8', 'int16', 'int32', 'int64', 'float32', 'float64'
-            %     chunkShape - Chunk shape as a vector, e.g. [32, 32, 32]
             %
             %   Optional Name-Value Arguments:
+            %     chunkShape - Chunk shape as a vector, e.g. [32, 32, 32]
+            %                  Default: min(shape, 100) per dimension
             %     shardShape - Shard shape for sharded arrays (enables sharding codec)
             %     codec      - Compression codec, can be:
             %                  - String: 'zstd', 'gzip', 'blosc'
@@ -30,13 +32,15 @@ classdef ZarrArray < handle
             %                        'cname', 'lz4', 'clevel', 5, 'shuffle', 'shuffle'))
 
             p = inputParser;
-            addRequired(p, 'path', @ischar);
-            addRequired(p, 'shape', @isnumeric);
-            addRequired(p, 'dataType', @ischar);
-            addRequired(p, 'chunkShape', @isnumeric);
+            addParameter(p, 'chunkShape', [], @isnumeric);
             addParameter(p, 'shardShape', [], @isnumeric);
             addParameter(p, 'codec', '', @(x) ischar(x) || isstruct(x));
-            parse(p, path, shape, dataType, chunkShape, varargin{:});
+            parse(p, varargin{:});
+
+            chunkShape = p.Results.chunkShape;
+            if isempty(chunkShape)
+                chunkShape = ZarrArray.defaultChunkShape(shape);
+            end
 
             shardShape = p.Results.shardShape;
             codecParam = p.Results.codec;
@@ -98,24 +102,25 @@ classdef ZarrArray < handle
             arr = ZarrArray(path);
         end
 
-        function arr = createFromData(path, data, chunkShape, varargin)
+        function arr = createFromData(path, data, varargin)
             % CREATEFROMDATA Create a new Zarr array from existing data
-            %   arr = ZarrArray.createFromData(path, data, chunkShape)
-            %   arr = ZarrArray.createFromData(path, data, chunkShape, 'shardShape', shardShape)
-            %   arr = ZarrArray.createFromData(path, data, chunkShape, 'codec', 'zstd')
+            %   arr = ZarrArray.createFromData(path, data)
+            %   arr = ZarrArray.createFromData(path, data, 'chunkShape', [32, 32, 32])
+            %   arr = ZarrArray.createFromData(path, data, 'codec', 'zstd')
             %
             %   Arguments:
-            %     path       - Path where the array will be created
-            %     data       - MATLAB array to store (data type and shape are inferred)
-            %     chunkShape - Chunk shape as a vector, e.g. [32, 32, 32]
+            %     path - Path where the array will be created
+            %     data - MATLAB array to store (data type and shape are inferred)
             %
             %   Optional Name-Value Arguments:
+            %     chunkShape - Chunk shape as a vector, e.g. [32, 32, 32]
+            %                  Default: min(shape, 100) per dimension
             %     shardShape - Shard shape for sharded arrays (enables sharding codec)
             %     codec      - Compression codec ('zstd', 'gzip', 'blosc' or struct)
             %
             %   Example:
             %     data = uint16(rand(100, 100, 100) * 65535);
-            %     arr = ZarrArray.createFromData('/path/to/array', data, [32, 32, 32], 'codec', 'zstd');
+            %     arr = ZarrArray.createFromData('/path/to/array', data, 'codec', 'zstd');
 
             % Infer shape from data
             shape = size(data);
@@ -124,7 +129,7 @@ classdef ZarrArray < handle
             dataType = ZarrArray.matlabClassToZarrType(class(data));
 
             % Create array and write data
-            arr = ZarrArray.create(path, shape, dataType, chunkShape, varargin{:});
+            arr = ZarrArray.create(path, shape, dataType, varargin{:});
 
             % Write the data
             bbox = [ones(numel(shape), 1), (shape(:) + 1)];
@@ -133,6 +138,11 @@ classdef ZarrArray < handle
     end
 
     methods (Static, Access = private)
+        function chunkShape = defaultChunkShape(shape)
+            % DEFAULTCHUNKSHAPE Compute default chunk shape as min(shape, 100) per dimension
+            chunkShape = min(shape, 100);
+        end
+
         function zarrType = matlabClassToZarrType(matlabClass)
             % MATLABCLASSTOZARRTYPE Convert MATLAB class name to Zarr data type string
             switch matlabClass
