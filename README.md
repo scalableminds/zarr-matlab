@@ -1,6 +1,16 @@
 # MATLAB-Zarr
 A Zarr v3 implementation based on [zarrs](https://zarrs.dev) for MATLAB.
 
+## Features
+
+- Read and write Zarr v3 arrays
+- Support for chunking and sharding
+- Compression codecs: zstd (default), gzip, blosc
+- Filesystem access (read-write) and HTTP/HTTPS remote access (read-only)
+- Group hierarchy support
+- Attributes for arrays and groups
+- Supported data types: `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`
+
 ## Usage
 
 ### ZarrArray
@@ -42,9 +52,8 @@ arr = ZarrArray.createFromData('/path/to/array', data, 'chunkShape', [32, 32, 32
 ```
 
 Notes:
-- Supported data types: `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`
 - Compression codecs: `zstd` (default), `gzip`, `blosc`, or `none` to disable compression
-- All arrays are created with the `transpose` codec to represent Fortran-order arrays.
+- All arrays use the `transpose` codec internally to handle MATLAB's column-major order.
 
 Open an existing array and read/write data:
 
@@ -126,7 +135,44 @@ arr = segmentation.openArray('1');
 
 Note: Remote access is read-only. The `list()` and `listContents()` methods are not available for HTTP URLs.
 
-## Building
+### Attributes
+
+Both arrays and groups support attributes:
+
+```matlab
+% Set attributes on a group
+grp = ZarrGroup.create('/path/to/dataset');
+grp.setAttribute('name', 'My Dataset');
+grp.setAttribute('resolution', [4, 4, 30]);
+
+% Set multiple attributes at once
+grp.setAttributes(struct('version', 2, 'author', 'John Doe'));
+
+% Get attributes
+name = grp.getAttribute('name');
+attrs = grp.getAttributes();  % Returns struct with all attributes
+
+% Attributes work the same way on arrays
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16');
+arr.setAttribute('units', 'nm');
+arr.setAttribute('scale', [1.0, 1.0, 2.0]);
+```
+
+Note: Writing attributes is not available for HTTP URLs (read-only).
+
+## Installation
+
+### From Toolbox (Recommended)
+
+Download `zarr-matlab.mltbx` from the releases page and double-click to install, or run:
+
+```matlab
+matlab.addons.install('zarr-matlab.mltbx')
+```
+
+### Building from Source
+
+Requires Rust toolchain installed.
 
 ```matlab
 cd zarr-matlab

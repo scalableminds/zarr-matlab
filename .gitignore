@@ -10,6 +10,7 @@
 Cargo.lock
 
 zarr-matlab/rust/*/target
+zarr-matlab/zarr-matlab.mltbx
 /target
 /testdata
 /testoutput
