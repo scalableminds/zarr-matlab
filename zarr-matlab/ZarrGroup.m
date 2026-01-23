@@ -1,7 +1,7 @@
-classdef ZarrGroup < handle
-    properties (SetAccess = private)
-        path
-    end
+classdef ZarrGroup < ZarrNode
+    % ZARRGROUP Zarr v3 group for organizing arrays and subgroups
+    %   A ZarrGroup represents a node in the Zarr hierarchy that can contain
+    %   arrays and other groups.
 
     methods (Static)
         function grp = create(path)
@@ -11,7 +11,7 @@ classdef ZarrGroup < handle
             %   Arguments:
             %     path - Path where the group will be created
 
-            if ZarrGroup.isHttpUrl(path)
+            if ZarrNode.isHttpUrl(path)
                 error('zarr:error', 'Cannot create groups at HTTP URLs');
             end
 
@@ -38,46 +38,6 @@ classdef ZarrGroup < handle
         end
     end
 
-    methods (Static, Access = private)
-        function result = isHttpUrl(path)
-            % ISHTTPURL Check if path is an HTTP/HTTPS URL
-            result = startsWith(path, 'http://') || startsWith(path, 'https://');
-        end
-
-        function result = joinPath(basePath, name)
-            % JOINPATH Join path components, handling both filesystem and HTTP paths
-            if ZarrGroup.isHttpUrl(basePath)
-                % For HTTP URLs, use forward slash and ensure no double slashes
-                if endsWith(basePath, '/')
-                    result = [basePath, name];
-                else
-                    result = [basePath, '/', name];
-                end
-            else
-                result = fullfile(basePath, name);
-            end
-        end
-
-        function metadata = fetchMetadata(path)
-            % FETCHMETADATA Fetch and parse zarr.json from local or HTTP path
-            if ZarrGroup.isHttpUrl(path)
-                jsonUrl = ZarrGroup.joinPath(path, 'zarr.json');
-                try
-                    options = weboptions('ContentType', 'json');
-                    metadata = webread(jsonUrl, options);
-                catch ME
-                    error('zarr:error', 'Failed to fetch zarr.json from ''%s'': %s', path, ME.message);
-                end
-            else
-                jsonPath = fullfile(path, 'zarr.json');
-                if ~isfile(jsonPath)
-                    error('zarr:error', 'No zarr.json found at ''%s''. Not a valid Zarr v3 group.', path);
-                end
-                metadata = jsondecode(fileread(jsonPath));
-            end
-        end
-    end
-
     methods
         function obj = ZarrGroup(path)
             % ZARRGROUP Open an existing Zarr group
@@ -86,7 +46,7 @@ classdef ZarrGroup < handle
             %   Arguments:
             %     path - Path to the existing Zarr group (local path or HTTP URL)
 
-            metadata = ZarrGroup.fetchMetadata(path);
+            metadata = ZarrNode.fetchMetadata(path);
 
             if ~isfield(metadata, 'node_type') || ~strcmp(metadata.node_type, 'group')
                 error('zarr:error', 'Path ''%s'' is not a Zarr group (node_type is not ''group'').', path);
@@ -105,7 +65,7 @@ classdef ZarrGroup < handle
             %   Returns:
             %     subgrp - ZarrGroup object for the subgroup
 
-            subpath = ZarrGroup.joinPath(obj.path, name);
+            subpath = ZarrNode.joinPath(obj.path, name);
             grp = ZarrGroup(subpath);
         end
 
@@ -119,7 +79,7 @@ classdef ZarrGroup < handle
             %   Returns:
             %     subgrp - ZarrGroup object for the new subgroup
 
-            if ZarrGroup.isHttpUrl(obj.path)
+            if ZarrNode.isHttpUrl(obj.path)
                 error('zarr:error', 'Cannot create groups at HTTP URLs');
             end
 
@@ -137,7 +97,7 @@ classdef ZarrGroup < handle
             %   Returns:
             %     arr - ZarrArray object for the array
 
-            subpath = ZarrGroup.joinPath(obj.path, name);
+            subpath = ZarrNode.joinPath(obj.path, name);
             arr = ZarrArray(subpath);
         end
 
@@ -160,7 +120,7 @@ classdef ZarrGroup < handle
             %   Returns:
             %     arr - ZarrArray object for the new array
 
-            if ZarrGroup.isHttpUrl(obj.path)
+            if ZarrNode.isHttpUrl(obj.path)
                 error('zarr:error', 'Cannot create arrays at HTTP URLs');
             end
 
@@ -186,7 +146,7 @@ classdef ZarrGroup < handle
             %   Returns:
             %     arr - ZarrArray object for the new array
 
-            if ZarrGroup.isHttpUrl(obj.path)
+            if ZarrNode.isHttpUrl(obj.path)
                 error('zarr:error', 'Cannot create arrays at HTTP URLs');
             end
 
@@ -203,7 +163,7 @@ classdef ZarrGroup < handle
             %
             %   Note: This method is not available for HTTP URLs
 
-            if ZarrGroup.isHttpUrl(obj.path)
+            if ZarrNode.isHttpUrl(obj.path)
                 error('zarr:error', 'Cannot list contents of HTTP URLs (directory listing not supported)');
             end
 
@@ -231,7 +191,7 @@ classdef ZarrGroup < handle
             %
             %   Note: This method is not available for HTTP URLs
 
-            if ZarrGroup.isHttpUrl(obj.path)
+            if ZarrNode.isHttpUrl(obj.path)
                 error('zarr:error', 'Cannot list contents of HTTP URLs (directory listing not supported)');
             end
 
@@ -254,80 +214,6 @@ classdef ZarrGroup < handle
                     end
                 end
             end
-        end
-
-        function attrs = getAttributes(obj)
-            % GETATTRIBUTES Get all attributes of this group
-            %   attrs = grp.getAttributes()
-            %
-            %   Returns:
-            %     attrs - Struct containing all attributes (empty struct if none)
-
-            metadata = ZarrGroup.fetchMetadata(obj.path);
-            if isfield(metadata, 'attributes')
-                attrs = metadata.attributes;
-            else
-                attrs = struct();
-            end
-        end
-
-        function setAttributes(obj, attrs)
-            % SETATTRIBUTES Set all attributes of this group
-            %   grp.setAttributes(attrs)
-            %
-            %   Arguments:
-            %     attrs - Struct containing attributes to set
-            %
-            %   Note: This method is not available for HTTP URLs
-
-            if ZarrGroup.isHttpUrl(obj.path)
-                error('zarr:error', 'Cannot write attributes to HTTP URLs');
-            end
-
-            jsonPath = fullfile(obj.path, 'zarr.json');
-            metadata = jsondecode(fileread(jsonPath));
-            metadata.attributes = attrs;
-
-            fid = fopen(jsonPath, 'w');
-            if fid == -1
-                error('zarr:error', 'Failed to write zarr.json at %s', obj.path);
-            end
-            fprintf(fid, '%s', jsonencode(metadata));
-            fclose(fid);
-        end
-
-        function value = getAttribute(obj, name)
-            % GETATTRIBUTE Get a single attribute by name
-            %   value = grp.getAttribute(name)
-            %
-            %   Arguments:
-            %     name - Name of the attribute
-            %
-            %   Returns:
-            %     value - Value of the attribute
-            %
-            %   Throws error if attribute does not exist
-
-            attrs = obj.getAttributes();
-            if ~isfield(attrs, name)
-                error('zarr:error', 'Attribute ''%s'' not found', name);
-            end
-            value = attrs.(name);
-        end
-
-        function setAttribute(obj, name, value)
-            % SETATTRIBUTE Set a single attribute
-            %   grp.setAttribute(name, value)
-            %
-            %   Arguments:
-            %     name  - Name of the attribute
-            %     value - Value to set
-            %
-            %   Note: This method is not available for HTTP URLs
-
-            attrs = obj.getAttributes();
-            attrs.(name) = value;
-            obj.setAttributes(attrs);
         end
     end
 end

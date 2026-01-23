@@ -1,7 +1,7 @@
 classdef ZarrArrayTest < matlab.unittest.TestCase
 
-    properties (Constant)
-        TempDir = '/tmp/zarr_matlab_test';
+    properties (Access = private)
+        TempDir
     end
 
     methods (TestClassSetup)
@@ -12,7 +12,8 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
     end
 
     methods (TestMethodSetup)
-        function cleanupTempDir(testCase)
+        function setupTempDir(testCase)
+            testCase.TempDir = fullfile(tempdir, 'zarr_matlab_test');
             if isfolder(testCase.TempDir)
                 rmdir(testCase.TempDir, 's');
             end

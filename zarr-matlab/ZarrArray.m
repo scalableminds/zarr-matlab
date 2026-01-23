@@ -1,7 +1,6 @@
-classdef ZarrArray < handle
-    properties (SetAccess = private)
-        path
-    end
+classdef ZarrArray < ZarrNode
+    % ZARRARRAY Zarr v3 array for reading and writing chunked array data
+    %   A ZarrArray represents a chunked, compressed N-dimensional array.
 
     methods (Static)
         function arr = create(path, shape, dataType, varargin)
@@ -144,43 +143,6 @@ classdef ZarrArray < handle
             chunkShape = min(shape, 100);
         end
 
-        function result = isHttpUrl(path)
-            % ISHTTPURL Check if path is an HTTP/HTTPS URL
-            result = startsWith(path, 'http://') || startsWith(path, 'https://');
-        end
-
-        function result = joinPath(basePath, name)
-            % JOINPATH Join path components, handling both filesystem and HTTP paths
-            if ZarrArray.isHttpUrl(basePath)
-                if endsWith(basePath, '/')
-                    result = [basePath, name];
-                else
-                    result = [basePath, '/', name];
-                end
-            else
-                result = fullfile(basePath, name);
-            end
-        end
-
-        function metadata = fetchMetadata(path)
-            % FETCHMETADATA Fetch and parse zarr.json from local or HTTP path
-            if ZarrArray.isHttpUrl(path)
-                jsonUrl = ZarrArray.joinPath(path, 'zarr.json');
-                try
-                    options = weboptions('ContentType', 'json');
-                    metadata = webread(jsonUrl, options);
-                catch ME
-                    error('zarr:error', 'Failed to fetch zarr.json from ''%s'': %s', path, ME.message);
-                end
-            else
-                jsonPath = fullfile(path, 'zarr.json');
-                if ~isfile(jsonPath)
-                    error('zarr:error', 'No zarr.json found at ''%s''.', path);
-                end
-                metadata = jsondecode(fileread(jsonPath));
-            end
-        end
-
         function zarrType = matlabClassToZarrType(matlabClass)
             % MATLABCLASSTOZARRTYPE Convert MATLAB class name to Zarr data type string
             switch matlabClass
@@ -194,6 +156,7 @@ classdef ZarrArray < handle
                     error('zarr:error', 'Unsupported data type: %s', matlabClass);
             end
         end
+
         function codec = buildCodec(codecParam, dataType)
             % BUILDCODEC Build a codec struct from string or struct input
             %   Adds default configuration for compression codecs if not provided
@@ -357,80 +320,6 @@ classdef ZarrArray < handle
             %     data - Data to write (must match the bbox dimensions and array data type)
 
             zarrMex('write', obj.path, bbox, data);
-        end
-
-        function attrs = getAttributes(obj)
-            % GETATTRIBUTES Get all attributes of this array
-            %   attrs = arr.getAttributes()
-            %
-            %   Returns:
-            %     attrs - Struct containing all attributes (empty struct if none)
-
-            metadata = ZarrArray.fetchMetadata(obj.path);
-            if isfield(metadata, 'attributes')
-                attrs = metadata.attributes;
-            else
-                attrs = struct();
-            end
-        end
-
-        function setAttributes(obj, attrs)
-            % SETATTRIBUTES Set all attributes of this array
-            %   arr.setAttributes(attrs)
-            %
-            %   Arguments:
-            %     attrs - Struct containing attributes to set
-            %
-            %   Note: This method is not available for HTTP URLs
-
-            if ZarrArray.isHttpUrl(obj.path)
-                error('zarr:error', 'Cannot write attributes to HTTP URLs');
-            end
-
-            jsonPath = fullfile(obj.path, 'zarr.json');
-            metadata = jsondecode(fileread(jsonPath));
-            metadata.attributes = attrs;
-
-            fid = fopen(jsonPath, 'w');
-            if fid == -1
-                error('zarr:error', 'Failed to write zarr.json at %s', obj.path);
-            end
-            fprintf(fid, '%s', jsonencode(metadata));
-            fclose(fid);
-        end
-
-        function value = getAttribute(obj, name)
-            % GETATTRIBUTE Get a single attribute by name
-            %   value = arr.getAttribute(name)
-            %
-            %   Arguments:
-            %     name - Name of the attribute
-            %
-            %   Returns:
-            %     value - Value of the attribute
-            %
-            %   Throws error if attribute does not exist
-
-            attrs = obj.getAttributes();
-            if ~isfield(attrs, name)
-                error('zarr:error', 'Attribute ''%s'' not found', name);
-            end
-            value = attrs.(name);
-        end
-
-        function setAttribute(obj, name, value)
-            % SETATTRIBUTE Set a single attribute
-            %   arr.setAttribute(name, value)
-            %
-            %   Arguments:
-            %     name  - Name of the attribute
-            %     value - Value to set
-            %
-            %   Note: This method is not available for HTTP URLs
-
-            attrs = obj.getAttributes();
-            attrs.(name) = value;
-            obj.setAttributes(attrs);
         end
     end
 end

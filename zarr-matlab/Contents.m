@@ -6,6 +6,7 @@
 % Classes:
 %   ZarrArray  - Read and write Zarr v3 arrays
 %   ZarrGroup  - Create and navigate Zarr v3 group hierarchies
+%   ZarrNode   - Base class for arrays and groups (provides attribute methods)
 %
 %
 % For more information, see the README or visit:

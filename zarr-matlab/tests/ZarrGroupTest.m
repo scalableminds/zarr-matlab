@@ -2,7 +2,10 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
 
     properties (Constant)
         RemoteGroupPath = 'https://static.webknossos.org/data/zarr_v3/l4_sample';
-        TempDir = '/tmp/zarr_matlab_test';
+    end
+
+    properties (Access = private)
+        TempDir
     end
 
     methods (TestClassSetup)
@@ -13,7 +16,8 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
     end
 
     methods (TestMethodSetup)
-        function cleanupTempDir(testCase)
+        function setupTempDir(testCase)
+            testCase.TempDir = fullfile(tempdir, 'zarr_matlab_test');
             if isfolder(testCase.TempDir)
                 rmdir(testCase.TempDir, 's');
             end
