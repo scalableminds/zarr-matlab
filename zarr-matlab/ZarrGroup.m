@@ -255,5 +255,79 @@ classdef ZarrGroup < handle
                 end
             end
         end
+
+        function attrs = getAttributes(obj)
+            % GETATTRIBUTES Get all attributes of this group
+            %   attrs = grp.getAttributes()
+            %
+            %   Returns:
+            %     attrs - Struct containing all attributes (empty struct if none)
+
+            metadata = ZarrGroup.fetchMetadata(obj.path);
+            if isfield(metadata, 'attributes')
+                attrs = metadata.attributes;
+            else
+                attrs = struct();
+            end
+        end
+
+        function setAttributes(obj, attrs)
+            % SETATTRIBUTES Set all attributes of this group
+            %   grp.setAttributes(attrs)
+            %
+            %   Arguments:
+            %     attrs - Struct containing attributes to set
+            %
+            %   Note: This method is not available for HTTP URLs
+
+            if ZarrGroup.isHttpUrl(obj.path)
+                error('zarr:error', 'Cannot write attributes to HTTP URLs');
+            end
+
+            jsonPath = fullfile(obj.path, 'zarr.json');
+            metadata = jsondecode(fileread(jsonPath));
+            metadata.attributes = attrs;
+
+            fid = fopen(jsonPath, 'w');
+            if fid == -1
+                error('zarr:error', 'Failed to write zarr.json at %s', obj.path);
+            end
+            fprintf(fid, '%s', jsonencode(metadata));
+            fclose(fid);
+        end
+
+        function value = getAttribute(obj, name)
+            % GETATTRIBUTE Get a single attribute by name
+            %   value = grp.getAttribute(name)
+            %
+            %   Arguments:
+            %     name - Name of the attribute
+            %
+            %   Returns:
+            %     value - Value of the attribute
+            %
+            %   Throws error if attribute does not exist
+
+            attrs = obj.getAttributes();
+            if ~isfield(attrs, name)
+                error('zarr:error', 'Attribute ''%s'' not found', name);
+            end
+            value = attrs.(name);
+        end
+
+        function setAttribute(obj, name, value)
+            % SETATTRIBUTE Set a single attribute
+            %   grp.setAttribute(name, value)
+            %
+            %   Arguments:
+            %     name  - Name of the attribute
+            %     value - Value to set
+            %
+            %   Note: This method is not available for HTTP URLs
+
+            attrs = obj.getAttributes();
+            attrs.(name) = value;
+            obj.setAttributes(attrs);
+        end
     end
 end

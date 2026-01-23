@@ -158,6 +158,61 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             testCase.verifyEqual(readData, testData);
         end
 
+        % Attribute Tests
+
+        function testGetAttributesEmpty(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_attrs_empty');
+            grp = ZarrGroup.create(groupPath);
+
+            attrs = grp.getAttributes();
+
+            testCase.verifyTrue(isstruct(attrs));
+            testCase.verifyEmpty(fieldnames(attrs));
+        end
+
+        function testSetAndGetAttributes(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_attrs');
+            grp = ZarrGroup.create(groupPath);
+
+            attrs = struct('name', 'test_dataset', 'version', 2, 'scales', [1.0, 1.0, 2.0]);
+            grp.setAttributes(attrs);
+
+            readAttrs = grp.getAttributes();
+
+            testCase.verifyEqual(readAttrs.name, 'test_dataset');
+            testCase.verifyEqual(readAttrs.version, 2);
+            testCase.verifyEqual(readAttrs.scales', [1.0, 1.0, 2.0]);
+        end
+
+        function testSetAndGetSingleAttribute(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_single_attr');
+            grp = ZarrGroup.create(groupPath);
+
+            grp.setAttribute('resolution', [4, 4, 30]);
+            grp.setAttribute('unit', 'nm');
+
+            testCase.verifyEqual(grp.getAttribute('resolution')', [4, 4, 30]);
+            testCase.verifyEqual(grp.getAttribute('unit'), 'nm');
+        end
+
+        function testGetNonExistentAttribute(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_no_attr');
+            grp = ZarrGroup.create(groupPath);
+
+            testCase.verifyError(@() grp.getAttribute('missing'), 'zarr:error');
+        end
+
+        function testAttributesPersist(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_attrs_persist');
+            grp = ZarrGroup.create(groupPath);
+            grp.setAttribute('key', 'value');
+
+            % Reopen the group
+            grp2 = ZarrGroup(groupPath);
+
+            testCase.verifyEqual(grp2.getAttribute('key'), 'value');
+        end
+
         % Error Tests
 
         function testOpenNonExistent(testCase)
@@ -217,6 +272,21 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
 
             testCase.verifyError(@() grp.createGroup('newgroup'), 'zarr:error');
             testCase.verifyError(@() grp.createArray('newarray', [10, 10], 'uint8'), 'zarr:error');
+        end
+
+        function testRemoteGetAttributes(testCase)
+            grp = ZarrGroup(testCase.RemoteGroupPath);
+
+            attrs = grp.getAttributes();
+
+            testCase.verifyTrue(isstruct(attrs));
+        end
+
+        function testRemoteSetAttributesError(testCase)
+            grp = ZarrGroup(testCase.RemoteGroupPath);
+
+            testCase.verifyError(@() grp.setAttributes(struct('key', 'value')), 'zarr:error');
+            testCase.verifyError(@() grp.setAttribute('key', 'value'), 'zarr:error');
         end
     end
 end

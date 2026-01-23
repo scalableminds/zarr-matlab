@@ -212,6 +212,61 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyLessThan(max(abs(testData(:) - readData(:))), 1e-10);
         end
 
+        % Attribute Tests
+
+        function testGetAttributesEmpty(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'array_attrs_empty');
+            arr = ZarrArray.create(arrayPath, [32, 32, 32], 'uint8', 'chunkShape', [16, 16, 16]);
+
+            attrs = arr.getAttributes();
+
+            testCase.verifyTrue(isstruct(attrs));
+            testCase.verifyEmpty(fieldnames(attrs));
+        end
+
+        function testSetAndGetAttributes(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'array_attrs');
+            arr = ZarrArray.create(arrayPath, [32, 32, 32], 'uint16', 'chunkShape', [16, 16, 16]);
+
+            attrs = struct('description', 'test array', 'scale', 2.5, 'offset', [10, 20, 30]);
+            arr.setAttributes(attrs);
+
+            readAttrs = arr.getAttributes();
+
+            testCase.verifyEqual(readAttrs.description, 'test array');
+            testCase.verifyEqual(readAttrs.scale, 2.5);
+            testCase.verifyEqual(readAttrs.offset', [10, 20, 30]);
+        end
+
+        function testSetAndGetSingleAttribute(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'array_single_attr');
+            arr = ZarrArray.create(arrayPath, [32, 32, 32], 'float32', 'chunkShape', [16, 16, 16]);
+
+            arr.setAttribute('voxel_size', [1.0, 1.0, 2.0]);
+            arr.setAttribute('unit', 'um');
+
+            testCase.verifyEqual(arr.getAttribute('voxel_size')', [1.0, 1.0, 2.0]);
+            testCase.verifyEqual(arr.getAttribute('unit'), 'um');
+        end
+
+        function testGetNonExistentAttribute(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'array_no_attr');
+            arr = ZarrArray.create(arrayPath, [32, 32, 32], 'uint8', 'chunkShape', [16, 16, 16]);
+
+            testCase.verifyError(@() arr.getAttribute('missing'), 'zarr:error');
+        end
+
+        function testAttributesPersist(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'array_attrs_persist');
+            arr = ZarrArray.create(arrayPath, [32, 32, 32], 'int16', 'chunkShape', [16, 16, 16]);
+            arr.setAttribute('key', 'value');
+
+            % Reopen the array
+            arr2 = ZarrArray(arrayPath);
+
+            testCase.verifyEqual(arr2.getAttribute('key'), 'value');
+        end
+
         % Error Tests
 
         function testWriteWithWrongDataType(testCase)
