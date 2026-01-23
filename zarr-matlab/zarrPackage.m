@@ -4,11 +4,12 @@ function zarrPackage(version)
     %   zarrPackage('0.2.0')   - Package with specified version
     %
     %   This function:
-    %     1. Updates version in Contents.m and the project file
-    %     2. Packages the toolbox as zarr-matlab.mltbx
+    %     1. Discovers all .m and .mex* files in the toolbox folder
+    %     2. Updates version in Contents.m
+    %     3. Packages the toolbox as zarr-matlab.mltbx
     %
     %   Prerequisites:
-    %     - MEX file must be built (run zarrBuild first)
+    %     - At least one MEX file must be present (run zarrBuild first)
     %     - MATLAB R2022a or later
     %
     %   The resulting .mltbx file can be:
@@ -17,16 +18,15 @@ function zarrPackage(version)
     %     - Distributed directly to users
 
     toolboxFolder = fileparts(mfilename('fullpath'));
-    prjFile = fullfile(toolboxFolder, 'zarr-matlab.prj');
 
-    if ~isfile(prjFile)
-        error('zarr:error', 'Project file not found: %s', prjFile);
-    end
-
-    % Check that MEX file exists
+    % Check that at least one MEX file exists
     mexFiles = dir(fullfile(toolboxFolder, 'zarrMex.mex*'));
     if isempty(mexFiles)
-        error('zarr:error', 'MEX file not found. Run zarrBuild() first.');
+        error('zarr:error', 'No MEX files found. Run zarrBuild() first.');
+    end
+    fprintf('Found %d MEX file(s):\n', numel(mexFiles));
+    for i = 1:numel(mexFiles)
+        fprintf('  - %s\n', mexFiles(i).name);
     end
 
     % Get or validate version
@@ -39,14 +39,58 @@ function zarrPackage(version)
         fprintf('Updated version to: %s\n', version);
     end
 
-    % Update version in project file
-    updateProjectVersion(prjFile, version);
+    % Create toolbox options
+    opts = matlab.addons.toolbox.ToolboxOptions(toolboxFolder, 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+
+    % Set toolbox metadata
+    opts.ToolboxName = 'zarr-matlab';
+    opts.ToolboxVersion = version;
+    opts.Summary = 'Zarr v3 implementation for MATLAB based on zarrs';
+    opts.Description = sprintf([...
+        'A high-performance Zarr v3 implementation for MATLAB, powered by the Rust-based zarrs library.\n\n' ...
+        'Features:\n' ...
+        '- Read and write Zarr v3 arrays\n' ...
+        '- Support for chunking and sharding\n' ...
+        '- Compression codecs: zstd (default), gzip, blosc\n' ...
+        '- HTTP/HTTPS remote access (read-only)\n' ...
+        '- Group hierarchy support\n' ...
+        '- Attributes for arrays and groups\n\n' ...
+        'Supported data types: uint8, uint16, uint32, uint64, int8, int16, int32, int64, float32, float64']);
+    opts.AuthorName = 'scalable minds';
+    opts.AuthorEmail = 'hello@scalableminds.com';
+    opts.AuthorCompany = 'scalable minds';
+
+    % Set MATLAB version requirements
+    opts.MinimumMatlabRelease = 'R2022a';
+    opts.MaximumMatlabRelease = '';
+
+    % Collect files to include
+    filesToInclude = {};
+
+    % Add all .m files (except build/package scripts)
+    mFiles = dir(fullfile(toolboxFolder, '*.m'));
+    excludeFiles = {'zarrBuild.m', 'zarrPackage.m'};
+    for i = 1:numel(mFiles)
+        if ~ismember(mFiles(i).name, excludeFiles)
+            filesToInclude{end+1} = fullfile(toolboxFolder, mFiles(i).name); %#ok<AGROW>
+        end
+    end
+
+    % Add all MEX files
+    for i = 1:numel(mexFiles)
+        filesToInclude{end+1} = fullfile(toolboxFolder, mexFiles(i).name); %#ok<AGROW>
+    end
+
+    opts.ToolboxFiles = filesToInclude;
+    opts.ToolboxMatlabPath = toolboxFolder;
+
+    % Set output file
+    outputFile = fullfile(toolboxFolder, 'zarr-matlab.mltbx');
+    opts.OutputFile = outputFile;
 
     % Package the toolbox
-    fprintf('Packaging toolbox...\n');
-    outputFile = fullfile(toolboxFolder, 'zarr-matlab.mltbx');
-
-    matlab.addons.toolbox.packageToolbox(prjFile, outputFile);
+    fprintf('Packaging toolbox with %d files...\n', numel(filesToInclude));
+    matlab.addons.toolbox.packageToolbox(opts);
 
     fprintf('Successfully created: %s\n', outputFile);
     fprintf('\nTo install, double-click the .mltbx file or run:\n');
@@ -83,18 +127,6 @@ function updateContentsVersion(toolboxFolder, version)
     text = regexprep(text, 'Version\s+\d+\.\d+\.\d+\s+\d+-\w+-\d+', newVersionLine);
 
     fid = fopen(contentsFile, 'w');
-    fprintf(fid, '%s', text);
-    fclose(fid);
-end
-
-function updateProjectVersion(prjFile, version)
-    text = fileread(prjFile);
-
-    % Update version in project file
-    text = regexprep(text, '<param\.version>[^<]*</param\.version>', ...
-        sprintf('<param.version>%s</param.version>', version));
-
-    fid = fopen(prjFile, 'w');
     fprintf(fid, '%s', text);
     fclose(fid);
 end

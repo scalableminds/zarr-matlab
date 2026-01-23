@@ -4,10 +4,10 @@ name: MATLAB Tests
 on: [push]
 
 jobs:
-  run-tests:
+  build-and-test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-15-intel, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-13, macos-latest, windows-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -22,12 +22,48 @@ jobs:
         with:
           command: cd zarr-matlab, zarrBuild
 
-      - name: Run zarrTest
+      - name: Run tests
         uses: matlab-actions/run-tests@v2
         with:
-          source-folder: zarr-matlab/tests
+          source-folder: zarr-matlab
+          select-by-folder: zarr-matlab/tests
 
       - uses: actions/upload-artifact@v4
         with:
           name: mex-${{ matrix.os }}
           path: zarr-matlab/zarrMex.mex*
+
+  package-toolbox:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all MEX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: mex-artifacts
+          pattern: mex-*
+
+      - name: Collect MEX files
+        run: |
+          cp mex-artifacts/mex-ubuntu-latest/* zarr-matlab/
+          cp mex-artifacts/mex-macos-13/* zarr-matlab/
+          cp mex-artifacts/mex-macos-latest/* zarr-matlab/
+          cp mex-artifacts/mex-windows-latest/* zarr-matlab/
+          ls -la zarr-matlab/zarrMex.*
+
+      - name: Setup MATLAB
+        uses: matlab-actions/setup-matlab@v2
+
+      - name: Package toolbox
+        uses: matlab-actions/run-command@v2
+        with:
+          command: cd zarr-matlab, zarrPackage
+
+      - name: Upload toolbox artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zarr-matlab-toolbox
+          path: zarr-matlab/zarr-matlab.mltbx
