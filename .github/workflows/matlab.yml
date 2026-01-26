@@ -1,7 +1,11 @@
 name: MATLAB Tests
 
 # Controls when the action will run.
-on: [push]
+on:
+  push:
+    branches: ["**"]
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
   build-and-test:
@@ -40,6 +44,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="dev"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Download all MEX artifacts
         uses: actions/download-artifact@v4
         with:
@@ -54,16 +69,63 @@ jobs:
           cp mex-artifacts/mex-windows-latest/* zarr-matlab/
           ls -la zarr-matlab/zarrMex.*
 
+      - name: Create archive
+        run: |
+          zip -r zarr-matlab-${{ steps.version.outputs.version }}.zip zarr-matlab -x "zarr-matlab/tests/*" -x "zarr-matlab/*.prj"
+
       - name: Setup MATLAB
         uses: matlab-actions/setup-matlab@v2
 
       - name: Package toolbox
         uses: matlab-actions/run-command@v2
         with:
-          command: cd zarr-matlab, zarrPackage
+          command: cd zarr-matlab, zarrPackage('${{ steps.version.outputs.version }}')
+
+      - name: Rename toolbox
+        run: |
+          mv zarr-matlab/zarr-matlab.mltbx zarr-matlab-${{ steps.version.outputs.version }}.mltbx
 
       - name: Upload toolbox artifact
         uses: actions/upload-artifact@v4
         with:
           name: zarr-matlab-toolbox
-          path: zarr-matlab/zarr-matlab.mltbx
+          path: zarr-matlab-${{ steps.version.outputs.version }}.mltbx
+
+      - name: Upload zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zarr-matlab-zip
+          path: zarr-matlab-${{ steps.version.outputs.version }}.zip
+
+  release:
+    needs: package-toolbox
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Get version
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download toolbox artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zarr-matlab-toolbox
+
+      - name: Download zip artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: zarr-matlab-zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            zarr-matlab-${{ steps.version.outputs.version }}.mltbx
+            zarr-matlab-${{ steps.version.outputs.version }}.zip
+          generate_release_notes: true
