@@ -68,7 +68,7 @@ jobs:
 
       - name: Create zip archive
         run: |
-          zip -r zarr-matlab-${{ steps.version.outputs.version }}.zip zarr-matlab/{Zarr*.m,zarrMex.*}
+          zip -r zarr-matlab-${{ steps.version.outputs.version }}.zip zarr-matlab/{Zarr*.m,zarrMex.*,tests}
 
       - name: Setup MATLAB
         uses: matlab-actions/setup-matlab@v2
