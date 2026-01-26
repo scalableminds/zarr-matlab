@@ -63,10 +63,7 @@ jobs:
 
       - name: Collect MEX files
         run: |
-          cp mex-artifacts/mex-ubuntu-latest/* zarr-matlab/
-          cp mex-artifacts/mex-macos-13/* zarr-matlab/
-          cp mex-artifacts/mex-macos-latest/* zarr-matlab/
-          cp mex-artifacts/mex-windows-latest/* zarr-matlab/
+          cp mex-artifacts/mex-*/* zarr-matlab/
           ls -la zarr-matlab/zarrMex.*
 
       - name: Create archive
