@@ -66,9 +66,9 @@ jobs:
           cp mex-artifacts/mex-*/* zarr-matlab/
           ls -la zarr-matlab/zarrMex.*
 
-      - name: Create archive
+      - name: Create zip archive
         run: |
-          zip -r zarr-matlab-${{ steps.version.outputs.version }}.zip zarr-matlab -x "zarr-matlab/tests/*" -x "zarr-matlab/*.prj"
+          zip -r zarr-matlab-${{ steps.version.outputs.version }}.zip zarr-matlab/{Zarr*.m,zarrMex.*}
 
       - name: Setup MATLAB
         uses: matlab-actions/setup-matlab@v2
