@@ -183,6 +183,36 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(readData, testData);
         end
 
+        function testWithBloscCompressor(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_blosc');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint16', ...
+                'chunkShape', [32, 32, 32], 'compressors', 'blosc');
+
+            testData = uint16(randi(65535, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testWithBloscCompressorConfigured(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_blosc_cfg');
+            % typesize is omitted - it will be inferred from the data type (float32 = 4 bytes)
+            bloscConfig = struct('cname', 'zstd', 'clevel', 9, 'shuffle', 'shuffle', 'blocksize', 0);
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'float32', ...
+                'chunkShape', [32, 32, 32], 'compressors', struct('name', 'blosc', 'configuration', bloscConfig));
+
+            testData = single(rand(32, 32, 32));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
         function testWithShardingAndZstd(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_shard_zstd');
             arr = ZarrArray.create(arrayPath, [128, 128, 128], 'uint16', ...

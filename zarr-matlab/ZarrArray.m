@@ -257,6 +257,11 @@ classdef ZarrArray < ZarrNode
             % Add default configuration if not provided
             if isempty(config)
                 config = ZarrArray.getDefaultCodecConfig(name, dataType);
+            else
+                % For blosc, add typesize if not provided
+                if strcmp(name, 'blosc') && ~isfield(config, 'typesize')
+                    config.typesize = ZarrArray.getTypeSize(dataType);
+                end
             end
 
             if isempty(config)
