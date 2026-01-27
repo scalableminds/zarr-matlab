@@ -25,6 +25,12 @@ arr = ZarrArray.create('/path/to/array', [200, 200, 200], 'uint16');
 % Create with explicit chunk shape
 arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', 'chunkShape', [32, 32, 32]);
 
+% Create a 1D array
+arr = ZarrArray.create('/path/to/array', [10000], 'float64', 'chunkShape', [1000]);
+
+% Create a 2D array
+arr = ZarrArray.create('/path/to/array', [1024, 768], 'uint8', 'chunkShape', [256, 256]);
+
 % Create with sharding (shard contains multiple chunks)
 arr = ZarrArray.create('/path/to/array', [256, 256, 256], 'uint16', ...
     'chunkShape', [32, 32, 32], 'shardShape', [128, 128, 128]);
@@ -106,6 +112,9 @@ arr.write(fullData);  % Writes starting at [1, 1, 1]
 % Write with automatic resize (extends array if needed)
 largeData = uint16(rand(50, 50, 50) * 65535);
 arr.write(largeData, [151, 200; 151, 200; 151, 200], 'allowResize', true);
+
+% Write to 1D arrays as column vector
+arr.write([34; 94; 28]);
 
 % Resize array explicitly
 arr.resize([200, 200, 200]);

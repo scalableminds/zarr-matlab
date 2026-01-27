@@ -43,6 +43,66 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(info.chunkShape, [32, 32, 32]);
         end
 
+        function testCreate1DArray(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_1d');
+
+            arr = ZarrArray.create(arrayPath, [1000], 'float64', 'chunkShape', [100]);
+
+            testCase.verifyTrue(isfile(fullfile(arrayPath, 'zarr.json')));
+
+            info = arr.info();
+            testCase.verifyEqual(info.shape, [1000]);
+            testCase.verifyEqual(info.dataType, 'float64');
+            testCase.verifyEqual(info.chunkShape, [100]);
+
+            % Write data (use column vector to match 1D array orientation)
+            testData = rand(200, 1);
+            bbox = [1, 201];
+            arr.write(testData, bbox);
+
+            % Read data back
+            readData = arr.read(bbox);
+            testCase.verifyEqual(readData, testData);
+
+            % Read entire array (1D arrays are returned as column vectors)
+            allData = arr.read();
+            testCase.verifyEqual(size(allData), [1000, 1]);
+        end
+
+        function testCreate2DArray(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_2d');
+
+            arr = ZarrArray.create(arrayPath, [200, 300], 'uint16', 'chunkShape', [64, 64]);
+
+            testCase.verifyTrue(isfile(fullfile(arrayPath, 'zarr.json')));
+
+            info = arr.info();
+            testCase.verifyEqual(info.shape, [200, 300]);
+            testCase.verifyEqual(info.dataType, 'uint16');
+            testCase.verifyEqual(info.chunkShape, [64, 64]);
+
+            % Write data to a region
+            testData = uint16(randi(65535, [50, 80]));
+            bbox = [10, 60; 20, 100];
+            arr.write(testData, bbox);
+
+            % Read data back
+            readData = arr.read(bbox);
+            testCase.verifyEqual(readData, testData);
+
+            % Write at origin without bbox
+            originData = uint16(randi(65535, [30, 40]));
+            arr.write(originData);
+
+            % Read back data written at origin
+            readOrigin = arr.read([1, 31; 1, 41]);
+            testCase.verifyEqual(readOrigin, originData);
+
+            % Read entire array
+            allData = arr.read();
+            testCase.verifyEqual(size(allData), [200, 300]);
+        end
+
         function testCreateWithDefaultChunkShape(testCase)
             arrayPath = fullfile(testCase.TempDir, 'default_chunk');
 
