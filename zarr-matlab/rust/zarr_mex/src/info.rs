@@ -33,7 +33,7 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
 
     // Open the array
     let store = create_readable_store(path)?;
-    let array = zarrs_result_to_str_error(Array::open(store, "/"))?;
+    let array = zarrs_result_to_str_error(Array::open(store, "/"), "Error while opening array")?;
 
     let shape = array.shape();
     let ndim = shape.len();
@@ -48,7 +48,11 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
 
     // Get chunk shape from chunk representation at origin
     let chunk_origin: Vec<u64> = vec![0; ndim];
-    let shard_shape = zarrs_result_to_str_error(array.chunk_shape(&chunk_origin))?.to_array_shape();
+    let shard_shape = zarrs_result_to_str_error(
+        array.chunk_shape(&chunk_origin),
+        "Error while determining chunk/shard shape",
+    )?
+    .to_array_shape();
 
     // Get shard shape (from sharding codec if present, otherwise same as chunk)
     let inner_chunk_shape: Option<Vec<u64>> = match array.metadata() {

@@ -17,7 +17,7 @@ pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
 
     let path = mx_array_to_str(store_str)?;
     let store = create_writable_store(path)?;
-    let array = zarrs_result_to_str_error(Array::open(store, "/"))?;
+    let array = zarrs_result_to_str_error(Array::open(store, "/"), "Error while opening array")?;
 
     let array_shape = array.shape();
     let ndim = array_shape.len();
@@ -50,7 +50,10 @@ pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
     let data_bytes = copy_as_c_order(data_arr, &bbox.shape, type_size)?;
 
     // write data
-    zarrs_result_to_str_error(array.store_array_subset(&subset, data_bytes))?;
+    zarrs_result_to_str_error(
+        array.store_array_subset(&subset, data_bytes),
+        "Error while writing data",
+    )?;
 
     Ok(())
 }

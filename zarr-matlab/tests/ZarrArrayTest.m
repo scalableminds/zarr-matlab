@@ -120,6 +120,72 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(readData, testData);
         end
 
+        function testReadEntireArray(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_read_all');
+            testData = uint8(randi(255, [20, 30, 40]));
+
+            arr = ZarrArray.createFromData(arrayPath, testData, 'chunkShape', [10, 10, 10]);
+
+            % Read entire array without specifying bbox
+            readData = arr.read();
+
+            testCase.verifyEqual(size(readData), [20, 30, 40]);
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testWriteWithoutBbox(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_write_no_bbox');
+            arr = ZarrArray.create(arrayPath, [50, 50, 50], 'uint16', 'chunkShape', [25, 25, 25]);
+
+            testData = uint16(randi(65535, [20, 30, 40]));
+
+            % Write without specifying bbox (writes at origin)
+            arr.write(testData);
+
+            % Read back the data
+            bbox = [1, 21; 1, 31; 1, 41];
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testWriteWithAllowResize(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_write_resize');
+            arr = ZarrArray.create(arrayPath, [20, 20, 20], 'uint8', 'chunkShape', [10, 10, 10]);
+
+            testCase.verifyEqual(arr.shape(), [20, 20, 20]);
+
+            % Write data that exceeds array bounds with allowResize
+            testData = uint8(randi(255, [15, 15, 15]));
+            bbox = [10, 25; 10, 25; 10, 25];  % Exceeds [20, 20, 20]
+
+            arr.write(bbox, testData, 'allowResize', true);
+
+            % Verify array was resized
+            testCase.verifyEqual(arr.shape(), [24, 24, 24]);
+
+            % Verify data was written correctly
+            readData = arr.read(bbox);
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testWriteWithAllowResizeAtOrigin(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_write_resize_origin');
+            arr = ZarrArray.create(arrayPath, [10, 10, 10], 'uint16', 'chunkShape', [10, 10, 10]);
+
+            % Write data larger than array at origin with allowResize
+            testData = uint16(randi(65535, [20, 25, 30]));
+
+            arr.write(testData, 'allowResize', true);
+
+            % Verify array was resized
+            testCase.verifyEqual(arr.shape(), [20, 25, 30]);
+
+            % Verify data was written correctly
+            readData = arr.read();
+            testCase.verifyEqual(readData, testData);
+        end
+
         function testOpenExisting(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_open');
             ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', 'chunkShape', [32, 32, 32]);
@@ -127,6 +193,26 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             arr = ZarrArray(arrayPath);
 
             testCase.verifyEqual(arr.shape(), [100, 100, 100]);
+        end
+
+        function testWithDoubleQuotedStrings(testCase)
+            % Test using double-quoted strings (MATLAB string scalars)
+            arrayPath = string(fullfile(testCase.TempDir, "class_double_quote"));
+
+            % Create array with double-quoted strings
+            arr = ZarrArray.create(arrayPath, [50, 50, 50], "uint8", ...
+                "chunkShape", [25, 25, 25], "compressors", "zstd");
+
+            testData = uint8(randi(255, [25, 25, 25]));
+            bbox = [1, 26; 1, 26; 1, 26];
+
+            arr.write(bbox, testData);
+
+            % Open with double-quoted path
+            arr2 = ZarrArray(arrayPath);
+            readData = arr2.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
         end
 
         function testWithSharding(testCase)

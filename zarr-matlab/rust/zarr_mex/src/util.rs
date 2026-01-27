@@ -1,7 +1,6 @@
 use ffi::*;
 
 use std;
-use std::convert::TryInto;
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
 use std::slice;
@@ -41,10 +40,10 @@ impl BBox {
     }
 
     pub fn to_subset(&self) -> Result<ArraySubset> {
-        let subset = zarrs_result_to_str_error(ArraySubset::new_with_start_shape(
-            self.start.clone(),
-            self.shape.clone(),
-        ))?;
+        let subset = zarrs_result_to_str_error(
+            ArraySubset::new_with_start_shape(self.start.clone(), self.shape.clone()),
+            "Error while creating array subset",
+        )?;
         Ok(subset)
     }
 }
@@ -61,7 +60,32 @@ pub fn as_nat(f: f64) -> Result<u64> {
 }
 
 pub fn mx_array_to_str<'a>(pm: MxArray) -> Result<&'a str> {
-    let pm_ptr = unsafe { mxArrayToUTF8String(pm) };
+    // Check if it's a MATLAB string scalar (double-quoted string)
+    let string_class = CString::new("string").unwrap();
+    let is_string = unsafe { mxIsClass(pm, string_class.as_ptr()) };
+
+    let pm_to_convert = if is_string {
+        // Convert string scalar to char array using MATLAB's char() function
+        let mut char_array: MxArrayMut = std::ptr::null_mut();
+        let char_fn = CString::new("char").unwrap();
+        let result = unsafe {
+            mexCallMATLAB(
+                1,
+                &mut char_array as *mut MxArrayMut,
+                1,
+                &pm as *const MxArray,
+                char_fn.as_ptr(),
+            )
+        };
+        if result != 0 || char_array.is_null() {
+            return Err("Failed to convert MATLAB string to char array".to_string());
+        }
+        char_array as MxArray
+    } else {
+        pm
+    };
+
+    let pm_ptr = unsafe { mxArrayToUTF8String(pm_to_convert) };
 
     if pm_ptr.is_null() {
         return Err("mxArrayToUTF8String returned null".to_string());
@@ -324,10 +348,11 @@ pub fn mx_array_to_bbox(pm: MxArray, ndim: usize) -> Result<BBox> {
 
 pub fn zarrs_result_to_str_error<T, E: std::error::Error>(
     result: std::result::Result<T, E>,
+    error_msg: &str,
 ) -> Result<T> {
     match result {
         Ok(ok) => Ok(ok),
-        Err(err) => Err(err.to_string()),
+        Err(err) => Err(format!("{}: {}", error_msg, err)),
     }
 }
 
@@ -356,17 +381,23 @@ pub fn is_http_url(path: &str) -> bool {
 
 pub fn create_readable_store(path: &str) -> Result<ReadableStorage> {
     let store: ReadableStorage = if is_http_url(path) {
-        let store = zarrs_result_to_str_error(zarrs_http::HTTPStore::new(path))?;
+        let store = zarrs_result_to_str_error(
+            zarrs_http::HTTPStore::new(path),
+            &format!("Error while opening HTTP store at '{}'", path),
+        )?;
         Arc::new(store)
     } else {
         let store_path: PathBuf = path.into();
-        let store =
-            zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?;
+        let store = zarrs_result_to_str_error(
+            zarrs::filesystem::FilesystemStore::new(&store_path),
+            &format!("Error while opening local store at '{}'", path),
+        )?;
         Arc::new(store)
     };
 
     // Check if zarr.json exists
-    let store_key = zarrs_result_to_str_error(StoreKey::new("zarr.json"))?;
+    let store_key =
+        zarrs_result_to_str_error(StoreKey::new("zarr.json"), "Error while creating store key")?;
     match store.get(&store_key) {
         Ok(Some(_)) => {}
         _ => {
@@ -385,6 +416,9 @@ pub fn create_writable_store(path: &str) -> Result<ReadableWritableListableStora
         return Err("HTTP URLs are not supported for write operations".to_string());
     }
     let store_path: PathBuf = path.into();
-    let store = zarrs_result_to_str_error(zarrs::filesystem::FilesystemStore::new(&store_path))?;
+    let store = zarrs_result_to_str_error(
+        zarrs::filesystem::FilesystemStore::new(&store_path),
+        &format!("Error while opening (writable) local store at '{}'", path),
+    )?;
     Ok(Arc::new(store))
 }

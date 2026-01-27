@@ -95,6 +95,19 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             testCase.verifyEqual(arr.shape(), [32, 32, 32]);
         end
 
+        function testOpenAndReadWriteArray(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_open_readwrite_array');
+            grp = ZarrGroup.create(groupPath);
+            grp.createArray('myarray', [32, 32, 32], 'float32', 'chunkShape', [16, 16, 16]);
+
+            arr = grp.openArray('myarray');
+            testData = single(rand([32, 32, 32]));
+            arr.write(testData);
+            readData = arr.read();
+
+            testCase.verifyEqual(readData, testData);
+        end
+
         function testCreateArrayFromData(testCase)
             groupPath = fullfile(testCase.TempDir, 'group_from_data');
             grp = ZarrGroup.create(groupPath);

@@ -16,7 +16,7 @@ pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
 
     let path = mx_array_to_str(store_str)?;
     let store = create_readable_store(path)?;
-    let array = zarrs_result_to_str_error(Array::open(store, "/"))?;
+    let array = zarrs_result_to_str_error(Array::open(store, "/"), "Error while opening array")?;
 
     let array_shape = array.shape();
     let ndim = array_shape.len();
@@ -39,8 +39,15 @@ pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
     let mat_class = zarrs_data_type_to_mx(&array.data_type())?;
 
     // read data
-    let data_all = zarrs_result_to_str_error(array.retrieve_array_subset(&subset))?;
-    let zarr_buf = zarrs_result_to_str_error(data_all.into_fixed())?.into_owned(); // in c-order
+    let data_all = zarrs_result_to_str_error(
+        array.retrieve_array_subset(&subset),
+        "Error while reading data from array",
+    )?;
+    let zarr_buf = zarrs_result_to_str_error(
+        data_all.into_fixed(),
+        "Error while reading read data into buffer",
+    )?
+    .into_owned(); // in c-order
 
     let mat_arr = create_numeric_array(&bbox.shape, mat_class, MxComplexity::Real)?;
 

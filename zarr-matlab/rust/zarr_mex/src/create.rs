@@ -27,17 +27,17 @@ pub(crate) fn create(rhs: &[MxArray]) -> Result<()> {
     let store = create_writable_store(path)?;
 
     // Create the array with the provided metadata
-    let array = zarrs_result_to_str_error(Array::new_with_metadata(
-        store,
-        "/",
-        metadata.into(),
-    ))?;
+    let array = zarrs_result_to_str_error(
+        Array::new_with_metadata(store, "/", metadata.into()),
+        "Error while creating array",
+    )?;
 
     // Store the metadata to disk
     zarrs_result_to_str_error(
         array.store_metadata_opt(
             &ArrayMetadataOptions::default().with_include_zarrs_metadata(false),
         ),
+        "Error while writing array metadata",
     )?;
 
     Ok(())

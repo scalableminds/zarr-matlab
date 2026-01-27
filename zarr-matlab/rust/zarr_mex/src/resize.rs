@@ -25,16 +25,18 @@ pub(crate) fn resize(rhs: &[MxArray]) -> Result<()> {
 
     // Open the array
     let store = create_writable_store(path)?;
-    let mut array = zarrs_result_to_str_error(Array::open(store, "/"))?;
+    let mut array =
+        zarrs_result_to_str_error(Array::open(store, "/"), "Error while opening array")?;
 
     // Resize the array
-    zarrs_result_to_str_error(array.set_shape(new_shape))?;
+    zarrs_result_to_str_error(array.set_shape(new_shape), "Error while resizing array")?;
 
     // Store the updated metadata
     zarrs_result_to_str_error(
         array.store_metadata_opt(
             &ArrayMetadataOptions::default().with_include_zarrs_metadata(false),
         ),
+        "Error while writing array metadata",
     )?;
 
     Ok(())

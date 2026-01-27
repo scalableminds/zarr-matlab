@@ -75,6 +75,7 @@ extern "C-unwind" {
     pub fn mxIsScalar(pm: MxArray) -> c_bool;
     pub fn mxIsDouble(pm: MxArray) -> c_bool;
     pub fn mxIsComplex(pm: MxArray) -> c_bool;
+    pub fn mxIsClass(pm: MxArray, classname: *const c_char) -> c_bool;
 
     // struct creation and access
     #[link_name = "mxCreateStructMatrix_730"]
@@ -96,4 +97,11 @@ extern "C-unwind" {
 #[cfg_attr(target_os = "windows", link(name = "libmex", kind = "dylib"))]
 extern "C-unwind" {
     pub fn mexErrMsgIdAndTxt(errorid: *const c_char, errormsg: *const c_char) -> ();
+    pub fn mexCallMATLAB(
+        nlhs: c_int,
+        plhs: *mut MxArrayMut,
+        nrhs: c_int,
+        prhs: *const MxArray,
+        functionName: *const c_char,
+    ) -> c_int;
 }
