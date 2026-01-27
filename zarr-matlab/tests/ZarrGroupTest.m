@@ -100,7 +100,7 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             grp = ZarrGroup.create(groupPath);
 
             testData = uint32(randi(1000000, [40, 30, 20]));
-            arr = grp.createArrayFromData('mydata', testData, 'chunkShape', [16, 16, 16], 'codec', 'zstd');
+            arr = grp.createArrayFromData('mydata', testData, 'chunkShape', [16, 16, 16], 'compressors', 'zstd');
 
             testCase.verifyTrue(isfile(fullfile(groupPath, 'mydata', 'zarr.json')));
             testCase.verifyEqual(arr.shape(), [40, 30, 20]);

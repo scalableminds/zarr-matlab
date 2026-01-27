@@ -114,10 +114,10 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(info.shardShape, [64, 64, 64]);
         end
 
-        function testWithZstdCodec(testCase)
+        function testWithZstdCompressor(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_zstd');
             arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint8', ...
-                'chunkShape', [32, 32, 32], 'codec', 'zstd');
+                'chunkShape', [32, 32, 32], 'compressors', 'zstd');
 
             testData = uint8(randi(255, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
@@ -128,10 +128,10 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(readData, testData);
         end
 
-        function testWithZstdCodecConfigured(testCase)
+        function testWithZstdCompressorConfigured(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_zstd_cfg');
             arr = ZarrArray.create(arrayPath, [64, 64, 64], 'int32', ...
-                'chunkShape', [32, 32, 32], 'codec', struct('name', 'zstd', 'configuration', struct('level', 10)));
+                'chunkShape', [32, 32, 32], 'compressors', struct('name', 'zstd', 'configuration', struct('level', 10)));
 
             testData = int32(randi(1000000, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
@@ -142,10 +142,10 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(readData, testData);
         end
 
-        function testWithGzipCodec(testCase)
+        function testWithGzipCompressor(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_gzip');
             arr = ZarrArray.create(arrayPath, [64, 64, 64], 'float64', ...
-                'chunkShape', [32, 32, 32], 'codec', struct('name', 'gzip', 'configuration', struct('level', 6)));
+                'chunkShape', [32, 32, 32], 'compressors', struct('name', 'gzip', 'configuration', struct('level', 6)));
 
             testData = rand(32, 32, 32);
             bbox = [1, 33; 1, 33; 1, 33];
@@ -153,15 +153,72 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             arr.write(bbox, testData);
             readData = arr.read(bbox);
 
-            testCase.verifyLessThan(max(abs(testData(:) - readData(:))), 1e-10);
+            testCase.verifyEqual(readData, testData);
         end
 
         function testWithShardingAndZstd(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_shard_zstd');
             arr = ZarrArray.create(arrayPath, [128, 128, 128], 'uint16', ...
-                'chunkShape', [16, 16, 16], 'shardShape', [64, 64, 64], 'codec', 'zstd');
+                'chunkShape', [16, 16, 16], 'shardShape', [64, 64, 64], 'compressors', 'zstd');
 
             testData = uint16(randi(65535, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testWithNoCompression(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_no_compress');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint8', ...
+                'chunkShape', [32, 32, 32], 'compressors', 'none');
+
+            testData = uint8(randi(255, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testWithNoFilters(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_no_filters');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint16', ...
+                'chunkShape', [32, 32, 32], 'filters', 'none');
+
+            testData = uint16(randi(65535, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testWithNoFiltersAndNoCompression(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_no_filters_no_compress');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'int32', ...
+                'chunkShape', [32, 32, 32], 'filters', 'none', 'compressors', 'none');
+
+            testData = int32(randi(1000000, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testWithCompressorSequence(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_compress_seq');
+            % Test with a cell array of compressors (sequence)
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint8', ...
+                'chunkShape', [32, 32, 32], 'compressors', {'zstd', 'gzip'});
+
+            testData = uint8(randi(255, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
             arr.write(bbox, testData);
@@ -185,18 +242,18 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(readData, testData);
         end
 
-        function testCreateFromDataWithCodec(testCase)
+        function testCreateFromDataWithCompressor(testCase)
             arrayPath = fullfile(testCase.TempDir, 'from_data_zstd');
             testData = single(rand(32, 32, 32));
 
-            arr = ZarrArray.createFromData(arrayPath, testData, 'chunkShape', [16, 16, 16], 'codec', 'zstd');
+            arr = ZarrArray.createFromData(arrayPath, testData, 'chunkShape', [16, 16, 16], 'compressors', 'zstd');
 
             info = arr.info();
             testCase.verifyEqual(info.dataType, 'float32');
 
             bbox = [1, 33; 1, 33; 1, 33];
             readData = arr.read(bbox);
-            testCase.verifyLessThan(max(abs(testData(:) - readData(:))), 1e-6);
+            testCase.verifyEqual(readData, testData);
         end
 
         function testCreateFromDataDouble(testCase)
@@ -210,7 +267,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
 
             bbox = [1, 21; 1, 21; 1, 21];
             readData = arr.read(bbox);
-            testCase.verifyLessThan(max(abs(testData(:) - readData(:))), 1e-10);
+            testCase.verifyEqual(readData, testData);
         end
 
         % Attribute Tests

@@ -105,7 +105,7 @@ classdef ZarrGroup < ZarrNode
             % CREATEARRAY Create a new array within this group
             %   arr = grp.createArray(name, shape, dataType)
             %   arr = grp.createArray(name, shape, dataType, 'chunkShape', [32, 32, 32])
-            %   arr = grp.createArray(name, shape, dataType, 'codec', 'zstd')
+            %   arr = grp.createArray(name, shape, dataType, 'compressors', 'zstd')
             %
             %   Arguments:
             %     name     - Name of the array to create
@@ -113,9 +113,10 @@ classdef ZarrGroup < ZarrNode
             %     dataType - Data type string
             %
             %   Optional Name-Value Arguments:
-            %     chunkShape - Chunk shape as a vector (default: min(shape, 100))
-            %     shardShape - Shard shape for sharded arrays
-            %     codec      - Compression codec (default: 'zstd', use 'none' to disable)
+            %     chunkShape  - Chunk shape as a vector (default: min(shape, 100))
+            %     shardShape  - Shard shape for sharded arrays
+            %     filters     - Filter codecs (default: transpose, use 'none' to disable)
+            %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
             %
             %   Returns:
             %     arr - ZarrArray object for the new array
@@ -132,16 +133,17 @@ classdef ZarrGroup < ZarrNode
             % CREATEARRAYFROMDATA Create a new array from existing data within this group
             %   arr = grp.createArrayFromData(name, data)
             %   arr = grp.createArrayFromData(name, data, 'chunkShape', [32, 32, 32])
-            %   arr = grp.createArrayFromData(name, data, 'codec', 'zstd')
+            %   arr = grp.createArrayFromData(name, data, 'compressors', 'zstd')
             %
             %   Arguments:
             %     name - Name of the array to create
             %     data - MATLAB array to store (data type and shape are inferred)
             %
             %   Optional Name-Value Arguments:
-            %     chunkShape - Chunk shape as a vector (default: min(shape, 100))
-            %     shardShape - Shard shape for sharded arrays
-            %     codec      - Compression codec (default: 'zstd', use 'none' to disable)
+            %     chunkShape  - Chunk shape as a vector (default: min(shape, 100))
+            %     shardShape  - Shard shape for sharded arrays
+            %     filters     - Filter codecs (default: transpose, use 'none' to disable)
+            %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
             %
             %   Returns:
             %     arr - ZarrArray object for the new array

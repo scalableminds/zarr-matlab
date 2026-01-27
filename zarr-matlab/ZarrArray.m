@@ -8,7 +8,8 @@ classdef ZarrArray < ZarrNode
             %   arr = ZarrArray.create(path, shape, dataType)
             %   arr = ZarrArray.create(path, shape, dataType, 'chunkShape', [32, 32, 32])
             %   arr = ZarrArray.create(path, shape, dataType, 'shardShape', [128, 128, 128])
-            %   arr = ZarrArray.create(path, shape, dataType, 'codec', 'zstd')
+            %   arr = ZarrArray.create(path, shape, dataType, 'filters', 'none')
+            %   arr = ZarrArray.create(path, shape, dataType, 'compressors', 'zstd')
             %
             %   Arguments:
             %     path       - Path where the array will be created
@@ -17,24 +18,30 @@ classdef ZarrArray < ZarrNode
             %                  'int8', 'int16', 'int32', 'int64', 'float32', 'float64'
             %
             %   Optional Name-Value Arguments:
-            %     chunkShape - Chunk shape as a vector, e.g. [32, 32, 32]
-            %                  Default: min(shape, 100) per dimension
-            %     shardShape - Shard shape for sharded arrays (enables sharding codec)
-            %     codec      - Compression codec (default: 'zstd'), can be:
-            %                  - String: 'zstd', 'gzip', 'blosc', or 'none' to disable
-            %                  - Struct with 'name' and optional 'configuration' fields
-            %                  Examples:
-            %                    'zstd'
-            %                    'none'  % disable compression
-            %                    struct('name', 'zstd', 'configuration', struct('level', 5))
-            %                    struct('name', 'gzip', 'configuration', struct('level', 6))
-            %                    struct('name', 'blosc', 'configuration', struct( ...
-            %                        'cname', 'lz4', 'clevel', 5, 'shuffle', 'shuffle'))
+            %     chunkShape  - Chunk shape as a vector, e.g. [32, 32, 32]
+            %                   Default: min(shape, 100) per dimension
+            %     shardShape  - Shard shape for sharded arrays (enables sharding codec)
+            %     filters     - Filter codecs applied before compression. Can be:
+            %                   - Cell array of codec specs (sequence)
+            %                   - Single codec spec (string or struct)
+            %                   - 'none' to disable filters
+            %                   Default: transpose codec with Fortran order
+            %     compressors - Compression codecs. Can be:
+            %                   - Cell array of codec specs (sequence)
+            %                   - Single codec spec (string or struct)
+            %                   - 'none' to disable compression
+            %                   Default: 'zstd'
+            %                   Examples:
+            %                     'zstd'
+            %                     'none'  % disable compression
+            %                     struct('name', 'zstd', 'configuration', struct('level', 5))
+            %                     {struct('name', 'gzip'), struct('name', 'crc32c')}
 
             p = inputParser;
             addParameter(p, 'chunkShape', [], @isnumeric);
             addParameter(p, 'shardShape', [], @isnumeric);
-            addParameter(p, 'codec', 'zstd', @(x) ischar(x) || isstruct(x));
+            addParameter(p, 'filters', [], @(x) ischar(x) || isstring(x) || isstruct(x) || iscell(x));
+            addParameter(p, 'compressors', 'zstd', @(x) ischar(x) || isstring(x) || isstruct(x) || iscell(x));
             parse(p, varargin{:});
 
             chunkShape = p.Results.chunkShape;
@@ -43,37 +50,43 @@ classdef ZarrArray < ZarrNode
             end
 
             shardShape = p.Results.shardShape;
-            codecParam = p.Results.codec;
+            filtersParam = p.Results.filters;
+            compressorsParam = p.Results.compressors;
             useSharding = ~isempty(shardShape);
             ndim = numel(shape);
 
-            % Build transpose codec to convert between MATLAB's Fortran order and Zarr's C order
-            transposeCodec = ZarrArray.buildTransposeCodec(ndim);
+            % Build filter codecs (default: transpose for Fortran order)
+            if isempty(filtersParam)
+                % Default: transpose codec for MATLAB's Fortran order
+                filterCodecs = { ZarrArray.buildTransposeCodec(ndim) };
+            else
+                filterCodecs = ZarrArray.normalizeCodecs(filtersParam, dataType);
+            end
 
-            % Build compression codec if specified
-            compressionCodec = ZarrArray.buildCodec(codecParam, dataType);
+            % Build compressor codecs (default: zstd)
+            compressorCodecs = ZarrArray.normalizeCodecs(compressorsParam, dataType);
 
             % Build the bytes codec with endian configuration if needed
             bytesCodec = ZarrArray.buildBytesCodec(dataType);
 
-            % Build the inner codecs (transpose + bytes + optional compression)
-            if isempty(compressionCodec)
-                innerCodecs = {{ transposeCodec, bytesCodec }};
-            else
-                innerCodecs = {{ transposeCodec, bytesCodec, compressionCodec }};
-            end
+            % Build the inner codecs: filters + bytes + compressors
+            % Double curly braces {{ }} are needed so struct() treats this as a single
+            % cell array value rather than creating multiple struct elements
+            innerCodecsList = [filterCodecs, {bytesCodec}, compressorCodecs];
+            innerCodecs = {{ innerCodecsList{:} }}; %#ok<CCAT1>
 
             if useSharding
                 % For sharding, transpose the chunk shapes to match the transposed array
+                indexCodecs = {{ ...
+                    struct('name', 'bytes', 'configuration', struct('endian', 'little')), ...
+                    struct('name', 'crc32c') }};
                 codecs = {{ struct( ...
                     'name', 'sharding_indexed', ...
                     'configuration', struct( ...
                     'chunk_shape', chunkShape, ...
                     'codecs', innerCodecs, ...
                     'index_location', 'end', ...
-                    'index_codecs', {{ ...
-                    struct('name', 'bytes', 'configuration', struct('endian', 'little')), ...
-                    struct('name', 'crc32c') }} ...
+                    'index_codecs', indexCodecs ...
                     )) }};
                 gridChunkShape = shardShape;
             else
@@ -81,19 +94,22 @@ classdef ZarrArray < ZarrNode
                 codecs = innerCodecs;
             end
 
+            chunkGrid = struct( ...
+                'name', 'regular', ...
+                'configuration', struct('chunk_shape', gridChunkShape) ...
+                );
+            chunkKeyEncoding = struct( ...
+                'name', 'default', ...
+                'configuration', struct('separator', '/') ...
+                );
+
             json = jsonencode(struct( ...
                 'zarr_format', 3, ...
                 'node_type', 'array', ...
                 'shape', shape, ...
                 'data_type', dataType, ...
-                'chunk_grid', struct( ...
-                'name', 'regular', ...
-                'configuration', struct('chunk_shape', gridChunkShape) ...
-                ), ...
-                'chunk_key_encoding', struct( ...
-                'name', 'default', ...
-                'configuration', struct('separator', '/') ...
-                ), ...
+                'chunk_grid', chunkGrid, ...
+                'chunk_key_encoding', chunkKeyEncoding, ...
                 'fill_value', 0, ...
                 'codecs', codecs ...
                 ));
@@ -106,21 +122,22 @@ classdef ZarrArray < ZarrNode
             % CREATEFROMDATA Create a new Zarr array from existing data
             %   arr = ZarrArray.createFromData(path, data)
             %   arr = ZarrArray.createFromData(path, data, 'chunkShape', [32, 32, 32])
-            %   arr = ZarrArray.createFromData(path, data, 'codec', 'zstd')
+            %   arr = ZarrArray.createFromData(path, data, 'compressors', 'zstd')
             %
             %   Arguments:
             %     path - Path where the array will be created
             %     data - MATLAB array to store (data type and shape are inferred)
             %
             %   Optional Name-Value Arguments:
-            %     chunkShape - Chunk shape as a vector, e.g. [32, 32, 32]
-            %                  Default: min(shape, 100) per dimension
-            %     shardShape - Shard shape for sharded arrays (enables sharding codec)
-            %     codec      - Compression codec (default: 'zstd', use 'none' to disable)
+            %     chunkShape  - Chunk shape as a vector, e.g. [32, 32, 32]
+            %                   Default: min(shape, 100) per dimension
+            %     shardShape  - Shard shape for sharded arrays (enables sharding codec)
+            %     filters     - Filter codecs (default: transpose, use 'none' to disable)
+            %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
             %
             %   Example:
             %     data = uint16(rand(100, 100, 100) * 65535);
-            %     arr = ZarrArray.createFromData('/path/to/array', data, 'codec', 'zstd');
+            %     arr = ZarrArray.createFromData('/path/to/array', data, 'compressors', 'zstd');
 
             % Infer shape from data
             shape = size(data);
@@ -141,6 +158,35 @@ classdef ZarrArray < ZarrNode
         function chunkShape = defaultChunkShape(shape)
             % DEFAULTCHUNKSHAPE Compute default chunk shape as min(shape, 100) per dimension
             chunkShape = min(shape, 100);
+        end
+
+        function codecs = normalizeCodecs(codecParam, dataType)
+            % NORMALIZECODECS Normalize codec input to a cell array of codec structs
+            %   Handles: 'none', single codec (string/struct), or cell array of codecs
+            %   Returns a cell array of codec structs (empty if 'none')
+
+            if ischar(codecParam) || isstring(codecParam)
+                codecParam = char(codecParam);
+                if strcmp(codecParam, 'none')
+                    codecs = {};
+                    return;
+                end
+                % Single codec as string
+                codec = ZarrArray.buildCodec(codecParam, dataType);
+                codecs = { codec };
+            elseif isstruct(codecParam)
+                % Single codec as struct
+                codec = ZarrArray.buildCodec(codecParam, dataType);
+                codecs = { codec };
+            elseif iscell(codecParam)
+                % Sequence of codecs
+                codecs = cell(1, numel(codecParam));
+                for i = 1:numel(codecParam)
+                    codecs{i} = ZarrArray.buildCodec(codecParam{i}, dataType);
+                end
+            else
+                error('zarr:error', 'Codec parameter must be ''none'', a string, a struct, or a cell array');
+            end
         end
 
         function zarrType = matlabClassToZarrType(matlabClass)

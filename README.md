@@ -5,6 +5,7 @@ A Zarr v3 implementation based on [zarrs](https://zarrs.dev) for MATLAB.
 
 - Read and write Zarr v3 arrays
 - Support for chunking and sharding
+- Filter codecs: transpose (default)
 - Compression codecs: zstd (default), gzip, blosc
 - Filesystem access (read-write) and HTTP/HTTPS remote access (read-only)
 - Group hierarchy support
@@ -29,11 +30,22 @@ arr = ZarrArray.create('/path/to/array', [256, 256, 256], 'uint16', ...
     'chunkShape', [32, 32, 32], 'shardShape', [128, 128, 128]);
 
 % Create without compression (zstd is the default)
-arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', 'codec', 'none');
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', 'compressors', 'none');
 
-% Create with compression and custom configuration
+% Create with compressor and custom configuration
 arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'float32', ...
-    'chunkShape', [32, 32, 32], 'codec', struct('name', 'zstd', 'configuration', struct('level', 10)));
+    'chunkShape', [32, 32, 32], 'compressors', struct('name', 'zstd', 'configuration', struct('level', 10)));
+
+% Create without filters (no transpose, for C-order data)
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', 'filters', 'none');
+
+% Create with no filters and no compression
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
+    'filters', 'none', 'compressors', 'none');
+
+% Create with multiple compressors (sequence)
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
+    'compressors', {struct('name', 'zstd'), struct('name', 'crc32c')});
 ```
 
 Create an array from existing data (shape and data type are inferred):
@@ -45,16 +57,16 @@ arr = ZarrArray.createFromData('/path/to/array', data);
 
 % Create from data with gzip instead of default zstd
 data = rand(64, 64, 64);  % double -> float64
-arr = ZarrArray.createFromData('/path/to/array', data, 'codec', 'gzip');
+arr = ZarrArray.createFromData('/path/to/array', data, 'compressors', 'gzip');
 
 % Create from data with explicit chunk shape
-arr = ZarrArray.createFromData('/path/to/array', data, 'chunkShape', [32, 32, 32], 'codec', 'zstd');
+arr = ZarrArray.createFromData('/path/to/array', data, 'chunkShape', [32, 32, 32]);
 ```
 
 Notes:
-- Compression codecs: `zstd` (default), `gzip`, `blosc`, or `none` to disable compression
-- All arrays use the `transpose` codec internally to handle MATLAB's column-major order.
-
+- **Filters**: Applied before bytes codec. Default is `transpose` (to store Fortran-order data). Use `'none'` to disable.
+- **Compressors**: Applied after bytes codec. Default is `zstd`. Supported: `zstd`, `gzip`, `blosc`, or `'none'` to disable.
+- Both `filters` and `compressors` accept: a single codec (string or struct), a cell array of codecs (sequence), or `'none'`. 
 Open an existing array and read/write data:
 
 ```matlab
@@ -91,12 +103,12 @@ raw = root.createGroup('raw');
 
 % Create arrays within groups
 seg_data = segmentation.createArray('data', [1000, 1000, 500], 'uint32', ...
-    'chunkShape', [64, 64, 64], 'shardShape', [256, 256, 256], 'codec', 'zstd');
+    'chunkShape', [64, 64, 64], 'shardShape', [256, 256, 256]);
 raw_data = raw.createArray('data', [1000, 1000, 500], 'uint8');
 
 % Create array from existing data
 data = uint16(rand(100, 100, 50) * 65535);
-arr = root.createArrayFromData('processed', data, 'codec', 'zstd');
+arr = root.createArrayFromData('processed', data);
 
 % List contents
 names = root.list();                    % Returns {'raw', 'segmentation'}
