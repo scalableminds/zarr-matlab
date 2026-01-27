@@ -92,11 +92,22 @@ shape = arr.shape(); % Returns shape as vector
 bbox = [1, 33; 1, 33; 1, 33];  % Read a 32x32x32 region
 data = arr.read(bbox);
 
-% Write data
-data = uint16(rand(32, 32, 32) * 65535);
-arr.write(bbox, data);
+% Read entire array (bbox is optional)
+allData = arr.read();
 
-% Resize array
+% Write data to a region
+data = uint16(rand(32, 32, 32) * 65535);
+arr.write(data, bbox);
+
+% Write entire array at origin (bbox is optional)
+fullData = uint16(rand(100, 100, 100) * 65535);
+arr.write(fullData);  % Writes starting at [1, 1, 1]
+
+% Write with automatic resize (extends array if needed)
+largeData = uint16(rand(50, 50, 50) * 65535);
+arr.write(largeData, [151, 200; 151, 200; 151, 200], 'allowResize', true);
+
+% Resize array explicitly
 arr.resize([200, 200, 200]);
 ```
 

@@ -71,7 +71,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = logical(randi([0, 1], [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -121,7 +121,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint16(reshape(1:1000, [10, 10, 10]));
             bbox = [1, 11; 1, 11; 1, 11];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -166,7 +166,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint8(randi(255, [15, 15, 15]));
             bbox = [10, 25; 10, 25; 10, 25];  % Exceeds [20, 20, 20]
 
-            arr.write(bbox, testData, 'allowResize', true);
+            arr.write(testData, bbox, 'allowResize', true);
 
             % Verify array was resized
             testCase.verifyEqual(arr.shape(), [24, 24, 24]);
@@ -213,7 +213,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint8(randi(255, [25, 25, 25]));
             bbox = [1, 26; 1, 26; 1, 26];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
 
             % Open with double-quoted path
             arr2 = ZarrArray(arrayPath);
@@ -242,7 +242,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint8(randi(255, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -256,7 +256,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = int32(randi(1000000, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -270,7 +270,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = rand(32, 32, 32);
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -284,7 +284,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint16(randi(65535, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -300,7 +300,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = single(rand(32, 32, 32));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -314,7 +314,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint16(randi(65535, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -328,7 +328,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint8(randi(255, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -342,7 +342,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint16(randi(65535, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -356,7 +356,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = int32(randi(1000000, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -371,7 +371,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint8(randi(255, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -397,7 +397,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint8(randi(255, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -412,7 +412,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testData = uint16(randi(65535, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
             readData = arr.read(bbox);
 
             testCase.verifyEqual(readData, testData);
@@ -526,7 +526,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             wrongData = uint8(randi(255, [32, 32, 32]));
             bbox = [1, 33; 1, 33; 1, 33];
 
-            testCase.verifyError(@() arr.write(bbox, wrongData), 'zarr:error');
+            testCase.verifyError(@() arr.write(wrongData, bbox), 'zarr:error');
         end
 
         function testWriteOutOfBounds(testCase)
@@ -537,7 +537,7 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             % Bounding box extends beyond array shape
             bbox = [50, 82; 1, 33; 1, 33];
 
-            testCase.verifyError(@() arr.write(bbox, data), 'zarr:error');
+            testCase.verifyError(@() arr.write(data, bbox), 'zarr:error');
         end
     end
 end

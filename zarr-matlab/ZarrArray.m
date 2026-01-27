@@ -169,9 +169,8 @@ classdef ZarrArray < ZarrNode
             % Create array and write data
             arr = ZarrArray.create(path, shape, dataType, varargin{:});
 
-            % Write the data
-            bbox = [ones(numel(shape), 1), (shape(:) + 1)];
-            arr.write(bbox, data);
+            % Write the data at origin
+            arr.write(data);
         end
     end
 
@@ -400,9 +399,6 @@ classdef ZarrArray < ZarrNode
         function dt = dataType(obj)
             % DATATYPE Get the data type of the array
             %   dt = arr.dataType()
-            %
-            %   Returns:
-            %     dt - Data type string (e.g., 'uint8', 'float32', 'bool')
 
             info = obj.info();
             dt = info.dataType;
@@ -441,35 +437,33 @@ classdef ZarrArray < ZarrNode
             data = zarrMex('read', obj.path, bbox);
         end
 
-        function write(obj, varargin)
+        function write(obj, data, varargin)
             % WRITE Write data to a region of the array
             %   arr.write(data)                        % Write at origin [1, 1, ...]
-            %   arr.write(bbox, data)                  % Write at specified region
+            %   arr.write(data, bbox)                  % Write at specified region
             %   arr.write(data, 'allowResize', true)   % Write and extend array if needed
-            %   arr.write(bbox, data, 'allowResize', true)
+            %   arr.write(data, bbox, 'allowResize', true)
             %
             %   Arguments:
+            %     data - Data to write (must match the bbox dimensions and array data type)
             %     bbox - (Optional) Bounding box as nx2 matrix with [start, end] for each dimension
             %            Uses 1-based indexing (MATLAB convention)
             %            If omitted, writes at origin based on data size.
-            %     data - Data to write (must match the bbox dimensions and array data type)
             %
             %   Optional Name-Value Arguments:
             %     allowResize - If true, extends the array if bbox exceeds current shape.
             %                   Only extends, never shrinks. Default: false
 
-            % Parse arguments: first determine if bbox was provided
-            if size(varargin{1}, 2) == 2 && size(varargin{1}, 1) >= 1 && isnumeric(varargin{1}) && ~isvector(varargin{1})
-                % First arg is bbox (nx2 matrix)
+            % Parse arguments: determine if bbox was provided
+            if ~isempty(varargin) && isnumeric(varargin{1}) && size(varargin{1}, 2) == 2
+                % Second arg is bbox (nx2 matrix)
                 bbox = varargin{1};
-                data = varargin{2};
-                extraArgs = varargin(3:end);
+                extraArgs = varargin(2:end);
             else
-                % First arg is data
-                data = varargin{1};
+                % No bbox provided, write at origin
                 dataShape = size(data);
                 bbox = [ones(numel(dataShape), 1), dataShape(:) + 1];
-                extraArgs = varargin(2:end);
+                extraArgs = varargin;
             end
 
             % Parse optional name-value arguments

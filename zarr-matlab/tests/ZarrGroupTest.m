@@ -163,7 +163,7 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             % Write and read through the nested structure
             testData = int32(reshape(1:512, [8, 8, 8]));
             bbox = [1, 9; 1, 9; 1, 9];
-            arr.write(bbox, testData);
+            arr.write(testData, bbox);
 
             % Open through hierarchy and verify
             reopened = ZarrGroup(rootPath);
