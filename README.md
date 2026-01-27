@@ -10,7 +10,7 @@ A Zarr v3 implementation based on [zarrs](https://zarrs.dev) for MATLAB.
 - Filesystem access (read-write) and HTTP/HTTPS remote access (read-only)
 - Group hierarchy support
 - Attributes for arrays and groups
-- Supported data types: `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`
+- Supported data types: `bool`, `uint8`, `uint16`, `uint32`, `uint64`, `int8`, `int16`, `int32`, `int64`, `float32`, `float64`
 
 ## Usage
 
@@ -64,6 +64,10 @@ arr = ZarrArray.createFromData('/path/to/array', data, 'compressors', 'gzip');
 
 % Create from data with explicit chunk shape
 arr = ZarrArray.createFromData('/path/to/array', data, 'chunkShape', [32, 32, 32]);
+
+% Create from logical array (stored as bool)
+mask = rand(64, 64, 64) > 0.5;  % logical -> bool
+arr = ZarrArray.createFromData('/path/to/mask', mask);
 ```
 
 Notes:

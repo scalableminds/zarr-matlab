@@ -64,6 +64,33 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(arr.shape(), [80, 120, 60]);
         end
 
+        function testCreateBoolArray(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_bool');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'bool', 'chunkShape', [32, 32, 32]);
+
+            testData = logical(randi([0, 1], [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testCreateFromDataLogical(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'from_data_logical');
+            testData = logical(randi([0, 1], [32, 32, 32]));
+
+            arr = ZarrArray.createFromData(arrayPath, testData, 'chunkShape', [16, 16, 16]);
+
+            info = arr.info();
+            testCase.verifyEqual(info.dataType, 'bool');
+
+            bbox = [1, 33; 1, 33; 1, 33];
+            readData = arr.read(bbox);
+            testCase.verifyEqual(readData, testData);
+        end
+
         function testShape(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_shape');
             arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', 'chunkShape', [32, 32, 32]);

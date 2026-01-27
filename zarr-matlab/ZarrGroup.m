@@ -117,7 +117,8 @@ classdef ZarrGroup < ZarrNode
             %     shardShape  - Shard shape for sharded arrays
             %     filters     - Filter codecs (default: transpose, use 'none' to disable)
             %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
-            %     fillValue   - Fill value for uninitialized chunks (default: 0)
+            %     fillValue   - Fill value for uninitialized chunks
+            %                   (default: false for bool, 0 for numeric types)
             %
             %   Returns:
             %     arr - ZarrArray object for the new array
@@ -145,7 +146,8 @@ classdef ZarrGroup < ZarrNode
             %     shardShape  - Shard shape for sharded arrays
             %     filters     - Filter codecs (default: transpose, use 'none' to disable)
             %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
-            %     fillValue   - Fill value for uninitialized chunks (default: 0)
+            %     fillValue   - Fill value for uninitialized chunks
+            %                   (default: false for bool, 0 for numeric types)
             %
             %   Returns:
             %     arr - ZarrArray object for the new array

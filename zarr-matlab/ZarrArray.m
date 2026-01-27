@@ -14,7 +14,7 @@ classdef ZarrArray < ZarrNode
             %   Arguments:
             %     path       - Path where the array will be created
             %     shape      - Array shape as a vector, e.g. [100, 100, 100]
-            %     dataType   - Data type string: 'uint8', 'uint16', 'uint32', 'uint64',
+            %     dataType   - Data type string: 'bool', 'uint8', 'uint16', 'uint32', 'uint64',
             %                  'int8', 'int16', 'int32', 'int64', 'float32', 'float64'
             %
             %   Optional Name-Value Arguments:
@@ -36,14 +36,15 @@ classdef ZarrArray < ZarrNode
             %                     'none'  % disable compression
             %                     struct('name', 'zstd', 'configuration', struct('level', 5))
             %                     {struct('name', 'gzip'), struct('name', 'crc32c')}
-            %     fillValue   - Fill value for uninitialized chunks. Default: 0
+            %     fillValue   - Fill value for uninitialized chunks.
+            %                   Default: false for bool, 0 for numeric types
 
             p = inputParser;
             addParameter(p, 'chunkShape', [], @isnumeric);
             addParameter(p, 'shardShape', [], @isnumeric);
             addParameter(p, 'filters', [], @(x) ischar(x) || isstring(x) || isstruct(x) || iscell(x));
             addParameter(p, 'compressors', 'zstd', @(x) ischar(x) || isstring(x) || isstruct(x) || iscell(x));
-            addParameter(p, 'fillValue', 0, @isnumeric);
+            addParameter(p, 'fillValue', [], @(x) isempty(x) || isnumeric(x) || islogical(x));
             parse(p, varargin{:});
 
             chunkShape = p.Results.chunkShape;
@@ -54,8 +55,18 @@ classdef ZarrArray < ZarrNode
             shardShape = p.Results.shardShape;
             filtersParam = p.Results.filters;
             compressorsParam = p.Results.compressors;
-            fillValue = p.Results.fillValue;
             useSharding = ~isempty(shardShape);
+
+            % Set default fill value based on data type
+            if isempty(p.Results.fillValue)
+                if strcmp(dataType, 'bool')
+                    fillValue = false;
+                else
+                    fillValue = 0;
+                end
+            else
+                fillValue = p.Results.fillValue;
+            end
             ndim = numel(shape);
 
             % Build filter codecs (default: transpose for Fortran order)
@@ -137,7 +148,8 @@ classdef ZarrArray < ZarrNode
             %     shardShape  - Shard shape for sharded arrays (enables sharding codec)
             %     filters     - Filter codecs (default: transpose, use 'none' to disable)
             %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
-            %     fillValue   - Fill value for uninitialized chunks (default: 0)
+            %     fillValue   - Fill value for uninitialized chunks
+            %                   (default: false for bool, 0 for numeric types)
             %
             %   Example:
             %     data = uint16(rand(100, 100, 100) * 65535);
@@ -196,6 +208,8 @@ classdef ZarrArray < ZarrNode
         function zarrType = matlabClassToZarrType(matlabClass)
             % MATLABCLASSTOZARRTYPE Convert MATLAB class name to Zarr data type string
             switch matlabClass
+                case 'logical'
+                    zarrType = 'bool';
                 case 'single'
                     zarrType = 'float32';
                 case 'double'
@@ -265,7 +279,7 @@ classdef ZarrArray < ZarrNode
         function size = getTypeSize(dataType)
             % GETTYPESIZE Get the size in bytes for a data type
             switch dataType
-                case {'uint8', 'int8'}
+                case {'bool', 'uint8', 'int8'}
                     size = 1;
                 case {'uint16', 'int16'}
                     size = 2;
@@ -280,10 +294,10 @@ classdef ZarrArray < ZarrNode
 
         function codec = buildBytesCodec(dataType)
             % BUILDBYTESCODEC Build bytes codec with endian config for multi-byte types
-            %   Single-byte types (uint8, int8) don't need endian specification
+            %   Single-byte types (bool, uint8, int8) don't need endian specification
             %   Multi-byte types need endian: 'little' or 'big'
 
-            singleByteTypes = {'uint8', 'int8'};
+            singleByteTypes = {'bool', 'uint8', 'int8'};
             if ismember(dataType, singleByteTypes)
                 codec = struct('name', 'bytes');
             else

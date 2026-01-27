@@ -343,6 +343,7 @@ pub fn zarrs_data_type_to_mx(data_type: &DataType) -> Result<MxClassId> {
         DataType::Int16 => MxClassId::Int16,
         DataType::Int32 => MxClassId::Int32,
         DataType::Int64 => MxClassId::Int64,
+        DataType::Bool => MxClassId::Logical,
         _ => {
             return Err("Unsupported data type".to_string());
         }
