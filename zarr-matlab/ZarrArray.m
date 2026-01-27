@@ -38,6 +38,10 @@ classdef ZarrArray < ZarrNode
             %                     {struct('name', 'gzip'), struct('name', 'crc32c')}
             %     fillValue   - Fill value for uninitialized chunks.
             %                   Default: false for bool, 0 for numeric types
+            %     chunkKeyEncoding - Chunk key encoding configuration. Can be:
+            %                   - String: '/' or '.' for separator (uses 'default' name)
+            %                   - Struct with 'name' ('default' or 'v2') and optional 'separator'
+            %                   Default: struct('name', 'default', 'separator', '/')
 
             p = inputParser;
             addParameter(p, 'chunkShape', [], @isnumeric);
@@ -45,6 +49,7 @@ classdef ZarrArray < ZarrNode
             addParameter(p, 'filters', [], @(x) ischar(x) || isstring(x) || isstruct(x) || iscell(x));
             addParameter(p, 'compressors', 'zstd', @(x) ischar(x) || isstring(x) || isstruct(x) || iscell(x));
             addParameter(p, 'fillValue', [], @(x) isempty(x) || isnumeric(x) || islogical(x));
+            addParameter(p, 'chunkKeyEncoding', [], @(x) isempty(x) || ischar(x) || isstring(x) || isstruct(x));
             parse(p, varargin{:});
 
             chunkShape = p.Results.chunkShape;
@@ -112,10 +117,9 @@ classdef ZarrArray < ZarrNode
                 'name', 'regular', ...
                 'configuration', struct('chunk_shape', gridChunkShape) ...
                 );
-            chunkKeyEncoding = struct( ...
-                'name', 'default', ...
-                'configuration', struct('separator', '/') ...
-                );
+
+            % Build chunk key encoding
+            chunkKeyEncoding = ZarrArray.buildChunkKeyEncoding(p.Results.chunkKeyEncoding);
 
             json = jsonencode(struct( ...
                 'zarr_format', 3, ...
@@ -150,6 +154,7 @@ classdef ZarrArray < ZarrNode
             %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
             %     fillValue   - Fill value for uninitialized chunks
             %                   (default: false for bool, 0 for numeric types)
+            %     chunkKeyEncoding - Chunk key encoding ('/' or '.' or struct)
             %
             %   Example:
             %     data = uint16(rand(100, 100, 100) * 65535);
@@ -303,6 +308,43 @@ classdef ZarrArray < ZarrNode
             else
                 codec = struct('name', 'bytes', ...
                     'configuration', struct('endian', 'little'));
+            end
+        end
+
+        function encoding = buildChunkKeyEncoding(param)
+            % BUILDCHUNKKEYENCODING Build chunk key encoding struct
+            %   Accepts: empty (default), string (separator), or struct
+            %   Returns struct with 'name' and 'configuration' fields
+
+            if isempty(param)
+                % Default: 'default' name with '/' separator
+                encoding = struct( ...
+                    'name', 'default', ...
+                    'configuration', struct('separator', '/') ...
+                    );
+            elseif ischar(param) || isstring(param)
+                % String specifies separator, use 'default' name
+                encoding = struct( ...
+                    'name', 'default', ...
+                    'configuration', struct('separator', char(param)) ...
+                    );
+            elseif isstruct(param)
+                % Struct with 'name' and optional 'separator'
+                if ~isfield(param, 'name')
+                    error('zarr:error', 'chunkKeyEncoding struct must have a ''name'' field');
+                end
+                name = param.name;
+                if isfield(param, 'separator')
+                    separator = param.separator;
+                else
+                    separator = '/';  % default separator
+                end
+                encoding = struct( ...
+                    'name', name, ...
+                    'configuration', struct('separator', separator) ...
+                    );
+            else
+                error('zarr:error', 'chunkKeyEncoding must be a string or struct');
             end
         end
 

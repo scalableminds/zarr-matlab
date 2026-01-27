@@ -49,6 +49,10 @@ arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
 
 % Create with custom fill value for uninitialized chunks
 arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'float32', 'fillValue', NaN);
+
+% Create with v2-style chunk key encoding (uses '.' separator)
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
+    'chunkKeyEncoding', struct('name', 'v2', 'separator', '.'));
 ```
 
 Create an array from existing data (shape and data type are inferred):

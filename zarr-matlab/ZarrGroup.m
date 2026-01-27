@@ -119,6 +119,7 @@ classdef ZarrGroup < ZarrNode
             %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
             %     fillValue   - Fill value for uninitialized chunks
             %                   (default: false for bool, 0 for numeric types)
+            %     chunkKeyEncoding - Chunk key encoding ('/' or '.' or struct)
             %
             %   Returns:
             %     arr - ZarrArray object for the new array
@@ -148,6 +149,7 @@ classdef ZarrGroup < ZarrNode
             %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
             %     fillValue   - Fill value for uninitialized chunks
             %                   (default: false for bool, 0 for numeric types)
+            %     chunkKeyEncoding - Chunk key encoding ('/' or '.' or struct)
             %
             %   Returns:
             %     arr - ZarrArray object for the new array

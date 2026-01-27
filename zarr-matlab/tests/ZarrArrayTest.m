@@ -266,6 +266,35 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(readData, uint16(ones(32, 32, 32) * 42));
         end
 
+        function testWithChunkKeyEncodingDotSeparator(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_chunk_key_dot');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint8', ...
+                'chunkShape', [32, 32, 32], 'chunkKeyEncoding', '.');
+
+            testData = uint8(randi(255, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
+        function testWithChunkKeyEncodingV2(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_chunk_key_v2');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint16', ...
+                'chunkShape', [32, 32, 32], ...
+                'chunkKeyEncoding', struct('name', 'v2', 'separator', '.'));
+
+            testData = uint16(randi(65535, [32, 32, 32]));
+            bbox = [1, 33; 1, 33; 1, 33];
+
+            arr.write(bbox, testData);
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, testData);
+        end
+
         function testCreateFromData(testCase)
             arrayPath = fullfile(testCase.TempDir, 'from_data');
             testData = uint16(randi(65535, [50, 40, 30]));
