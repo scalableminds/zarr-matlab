@@ -1,4 +1,4 @@
-# MATLAB-Zarr
+# Zarr-MATLAB
 A Zarr v3 implementation based on [zarrs](https://zarrs.dev) for MATLAB.
 
 ## Features
