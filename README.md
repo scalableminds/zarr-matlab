@@ -46,6 +46,9 @@ arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
 % Create with multiple compressors (sequence)
 arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
     'compressors', {struct('name', 'zstd'), struct('name', 'crc32c')});
+
+% Create with custom fill value for uninitialized chunks
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'float32', 'fillValue', NaN);
 ```
 
 Create an array from existing data (shape and data type are inferred):

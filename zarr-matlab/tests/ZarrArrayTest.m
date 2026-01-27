@@ -227,6 +227,18 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(readData, testData);
         end
 
+        function testWithCustomFillValue(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_fillvalue');
+            arr = ZarrArray.create(arrayPath, [64, 64, 64], 'uint16', ...
+                'chunkShape', [32, 32, 32], 'fillValue', 42);
+
+            % Read from unwritten region - should return fill value
+            bbox = [1, 33; 1, 33; 1, 33];
+            readData = arr.read(bbox);
+
+            testCase.verifyEqual(readData, uint16(ones(32, 32, 32) * 42));
+        end
+
         function testCreateFromData(testCase)
             arrayPath = fullfile(testCase.TempDir, 'from_data');
             testData = uint16(randi(65535, [50, 40, 30]));

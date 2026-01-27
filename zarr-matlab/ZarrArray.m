@@ -36,12 +36,14 @@ classdef ZarrArray < ZarrNode
             %                     'none'  % disable compression
             %                     struct('name', 'zstd', 'configuration', struct('level', 5))
             %                     {struct('name', 'gzip'), struct('name', 'crc32c')}
+            %     fillValue   - Fill value for uninitialized chunks. Default: 0
 
             p = inputParser;
             addParameter(p, 'chunkShape', [], @isnumeric);
             addParameter(p, 'shardShape', [], @isnumeric);
             addParameter(p, 'filters', [], @(x) ischar(x) || isstring(x) || isstruct(x) || iscell(x));
             addParameter(p, 'compressors', 'zstd', @(x) ischar(x) || isstring(x) || isstruct(x) || iscell(x));
+            addParameter(p, 'fillValue', 0, @isnumeric);
             parse(p, varargin{:});
 
             chunkShape = p.Results.chunkShape;
@@ -52,6 +54,7 @@ classdef ZarrArray < ZarrNode
             shardShape = p.Results.shardShape;
             filtersParam = p.Results.filters;
             compressorsParam = p.Results.compressors;
+            fillValue = p.Results.fillValue;
             useSharding = ~isempty(shardShape);
             ndim = numel(shape);
 
@@ -110,7 +113,7 @@ classdef ZarrArray < ZarrNode
                 'data_type', dataType, ...
                 'chunk_grid', chunkGrid, ...
                 'chunk_key_encoding', chunkKeyEncoding, ...
-                'fill_value', 0, ...
+                'fill_value', fillValue, ...
                 'codecs', codecs ...
                 ));
 
@@ -134,6 +137,7 @@ classdef ZarrArray < ZarrNode
             %     shardShape  - Shard shape for sharded arrays (enables sharding codec)
             %     filters     - Filter codecs (default: transpose, use 'none' to disable)
             %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
+            %     fillValue   - Fill value for uninitialized chunks (default: 0)
             %
             %   Example:
             %     data = uint16(rand(100, 100, 100) * 65535);
