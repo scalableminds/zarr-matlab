@@ -98,6 +98,13 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(arr.shape(), [100, 100, 100]);
         end
 
+        function testDataType(testCase)
+            arrayPath = fullfile(testCase.TempDir, 'class_datatype');
+            arr = ZarrArray.create(arrayPath, [32, 32, 32], 'float32', 'chunkShape', [16, 16, 16]);
+
+            testCase.verifyEqual(arr.dataType(), 'float32');
+        end
+
         function testResize(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_resize');
             arr = ZarrArray.create(arrayPath, [100, 100, 100], 'uint16', 'chunkShape', [32, 32, 32]);

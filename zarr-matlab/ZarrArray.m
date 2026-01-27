@@ -397,6 +397,17 @@ classdef ZarrArray < ZarrNode
             shape = info.shape;
         end
 
+        function dt = dataType(obj)
+            % DATATYPE Get the data type of the array
+            %   dt = arr.dataType()
+            %
+            %   Returns:
+            %     dt - Data type string (e.g., 'uint8', 'float32', 'bool')
+
+            info = obj.info();
+            dt = info.dataType;
+        end
+
         function resize(obj, newShape)
             % RESIZE Resize the array to a new shape
             %   arr.resize(newShape)
