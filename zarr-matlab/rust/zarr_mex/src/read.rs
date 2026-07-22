@@ -43,11 +43,12 @@ pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
         array.retrieve_array_subset(&subset),
         "Error while reading data from array",
     )?;
+    // Borrow the decoded bytes (in c-order) directly instead of cloning them;
+    // the transpose reads straight from this buffer into the MATLAB array.
     let zarr_buf = zarrs_result_to_str_error(
         data_all.into_fixed(),
         "Error while reading read data into buffer",
-    )?
-    .into_owned(); // in c-order
+    )?; // Cow<[u8]>, in c-order
 
     let mat_arr = create_numeric_array(&bbox.shape, mat_class, MxComplexity::Real)?;
 

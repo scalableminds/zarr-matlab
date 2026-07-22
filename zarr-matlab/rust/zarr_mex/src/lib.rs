@@ -1,4 +1,5 @@
 extern crate libc;
+extern crate rayon;
 extern crate zarrs;
 
 mod create;
