@@ -432,13 +432,13 @@ classdef ZarrArray < ZarrNode
             %     data - Array data from the specified region
 
             if nargin < 2 || isempty(bbox)
-                % Read entire array
-                arrayShape = obj.shape();
-                ndim = numel(arrayShape);
-                bbox = [ones(ndim, 1), arrayShape(:) + 1];
+                % Read entire array. The mex derives the whole-array region
+                % from the opened array itself, so we avoid a separate
+                % obj.shape() open just to build the bbox here.
+                data = zarrMex('read', obj.path);
+            else
+                data = zarrMex('read', obj.path, bbox);
             end
-
-            data = zarrMex('read', obj.path, bbox);
         end
 
         function write(obj, data, varargin)
@@ -458,21 +458,12 @@ classdef ZarrArray < ZarrNode
             %     allowResize - If true, extends the array if bbox exceeds current shape.
             %                   Only extends, never shrinks. Default: false
 
-            % Parse arguments: determine if bbox was provided
-            if ~isempty(varargin) && isnumeric(varargin{1}) && size(varargin{1}, 2) == 2
-                % Second arg is bbox (nx2 matrix)
+            % Determine whether an explicit bbox was provided (nx2 numeric first vararg)
+            hasBbox = ~isempty(varargin) && isnumeric(varargin{1}) && size(varargin{1}, 2) == 2;
+            if hasBbox
                 bbox = varargin{1};
                 extraArgs = varargin(2:end);
             else
-                % No bbox provided, write at origin
-                % Use array's dimensionality to handle MATLAB's minimum 2D arrays
-                arrayNdim = numel(obj.shape());
-                dataShape = size(data);
-                % Trim trailing singleton dimensions to match array dimensionality
-                if numel(dataShape) > arrayNdim
-                    dataShape = dataShape(1:arrayNdim);
-                end
-                bbox = [ones(numel(dataShape), 1), dataShape(:) + 1];
                 extraArgs = varargin;
             end
 
@@ -480,9 +471,30 @@ classdef ZarrArray < ZarrNode
             p = inputParser;
             addParameter(p, 'allowResize', false, @islogical);
             parse(p, extraArgs{:});
+            allowResize = p.Results.allowResize;
+
+            if ~hasBbox && ~allowResize
+                % Fast path: write at origin, letting the mex derive the region
+                % from the data's own dimensions. Avoids a separate obj.shape()
+                % open just to build the bbox.
+                zarrMex('write', obj.path, data);
+                return;
+            end
+
+            if ~hasBbox
+                % Origin write, but allowResize needs the current shape below,
+                % so compute the bbox here. Use the array's dimensionality to
+                % handle MATLAB's minimum 2D arrays (trim trailing singletons).
+                arrayNdim = numel(obj.shape());
+                dataShape = size(data);
+                if numel(dataShape) > arrayNdim
+                    dataShape = dataShape(1:arrayNdim);
+                end
+                bbox = [ones(numel(dataShape), 1), dataShape(:) + 1];
+            end
 
             % Resize if needed and allowed
-            if p.Results.allowResize
+            if allowResize
                 currentShape = obj.shape();
                 bboxEnd = bbox(:, 2) - 1;  % Convert to 0-based end index
                 newShape = max(currentShape(:), bboxEnd(:))';

@@ -13,7 +13,7 @@ use zarrs::array::data_type::{
     Int8DataType, UInt16DataType, UInt32DataType, UInt64DataType, UInt8DataType,
 };
 use zarrs::array::{ArraySubset, DataType};
-use zarrs::storage::{ReadableStorage, ReadableWritableListableStorage, StoreKey};
+use zarrs::storage::{ReadableStorage, ReadableWritableListableStorage};
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -600,19 +600,10 @@ pub fn create_readable_store(path: &str) -> Result<ReadableStorage> {
         Arc::new(store)
     };
 
-    // Check if zarr.json exists
-    let store_key =
-        zarrs_result_to_str_error(StoreKey::new("zarr.json"), "Error while creating store key")?;
-    match store.get(&store_key) {
-        Ok(Some(_)) => {}
-        _ => {
-            return Err(format!(
-                "No zarr.json found at '{}'. Not a valid Zarr v3 array.",
-                path
-            ));
-        }
-    };
-
+    // Note: we intentionally do not pre-check that `zarr.json` exists here.
+    // Every caller immediately does `Array::open`, which reads and validates
+    // `zarr.json` itself, so a pre-check would just double the metadata I/O
+    // (a full extra request over HTTP) on every open.
     Ok(store)
 }
 

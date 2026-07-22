@@ -4,16 +4,16 @@ use crate::ffi::*;
 use crate::util::*;
 
 pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
-    if rhs.len() != 3 {
+    // rhs is either [store, data] (write at origin) or [store, bbox, data].
+    if rhs.len() != 2 && rhs.len() != 3 {
         return Err(format!(
-            "Invalid number of input arguments. Expected 3, got {}",
+            "Invalid number of input arguments. Expected 2 or 3, got {}",
             rhs.len()
         ));
     }
 
     let store_str = rhs[0];
-    let bbox_arr = rhs[1];
-    let data_arr = rhs[2];
+    let data_arr = if rhs.len() == 3 { rhs[2] } else { rhs[1] };
 
     let path = mx_array_to_str(store_str)?;
     let store = create_writable_store(path)?;
@@ -31,8 +31,17 @@ pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
         ));
     };
 
-    // build shape
-    let bbox = mx_array_to_bbox(bbox_arr, ndim)?;
+    // build shape: no bbox arg means "write at origin", with the region taken
+    // from the data array's own dimensions (trailing singleton dims trimmed to
+    // the array's dimensionality, matching MATLAB's size() semantics).
+    let bbox = if rhs.len() == 3 {
+        mx_array_to_bbox(rhs[1], ndim)?
+    } else {
+        let data_dims = mx_array_size_to_usize_slice(data_arr);
+        let k = data_dims.len().min(ndim);
+        let shape: Vec<u64> = data_dims[..k].iter().map(|&d| d as u64).collect();
+        BBox::new(vec![0u64; k], shape)
+    };
     bbox.check_bounds(array_shape)?;
     let subset = bbox.to_subset()?;
 

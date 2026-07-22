@@ -4,15 +4,15 @@ use crate::ffi::*;
 use crate::util::*;
 
 pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
-    if rhs.len() != 2 {
+    // rhs is either [store] (whole array) or [store, bbox] (explicit region).
+    if rhs.len() != 1 && rhs.len() != 2 {
         return Err(format!(
-            "Invalid number of input arguments. Expected 2, got {}",
+            "Invalid number of input arguments. Expected 1 or 2, got {}",
             rhs.len()
         ));
     }
 
     let store_str = rhs[0];
-    let bbox_arr = rhs[1];
 
     let path = mx_array_to_str(store_str)?;
     let store = create_readable_store(path)?;
@@ -30,8 +30,12 @@ pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
         ));
     };
 
-    // build shape
-    let bbox = mx_array_to_bbox(bbox_arr, ndim)?;
+    // build shape: no bbox arg means "read the whole array"
+    let bbox = if rhs.len() == 2 {
+        mx_array_to_bbox(rhs[1], ndim)?
+    } else {
+        BBox::new(vec![0u64; ndim], array_shape.to_vec())
+    };
     bbox.check_bounds(array_shape)?;
     let subset = bbox.to_subset()?;
 
