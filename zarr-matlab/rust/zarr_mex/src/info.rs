@@ -1,4 +1,3 @@
-use zarrs::array::{Array, ChunkShapeTraits};
 use zarrs::plugin::{ExtensionName, ZarrVersion};
 
 use std::ffi::CString;
@@ -29,56 +28,54 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
         ));
     }
 
-    let store_str = rhs[0];
-    let path = mx_array_to_str(store_str)?;
+    let arg = resolve_array_arg(rhs[0])?;
 
-    // Open the array
-    let store = create_readable_store(path)?;
-    let array = zarrs_result_to_str_error(Array::open(store, "/"), "Error while opening array")?;
+    // Gather the plain metadata under the (possibly cached) array's lock, then
+    // build the MATLAB struct once the lock is released.
+    let (shape, data_type_str, shard_shape, inner_chunk_shape) = arg.with(|array| {
+        let shape = array.shape().to_vec();
+        let ndim = shape.len();
 
-    let shape = array.shape();
-    let ndim = shape.len();
+        // Data type as string (use the Zarr V3 name, e.g. "uint32")
+        let data_type_str = array
+            .data_type()
+            .name(ZarrVersion::V3)
+            .map(|name| name.into_owned())
+            .unwrap_or_else(|| format!("{}", array.data_type()));
+
+        // Chunk/shard shape from the chunk representation at the origin
+        let chunk_origin: Vec<u64> = vec![0; ndim];
+        let shard_shape = array.chunk_shape_vec(&chunk_origin)?;
+
+        // Inner chunk shape (from sharding codec if present, otherwise none)
+        let inner_chunk_shape: Option<Vec<u64>> = match array.metadata() {
+            zarrs::array::ArrayMetadata::V3(metadata) => metadata.codecs.iter().find_map(|codec| {
+                if codec.name() == "sharding_indexed" {
+                    codec
+                        .configuration()
+                        .and_then(|configuration| configuration.get("chunk_shape"))
+                        .and_then(|inner_chunk_shape| inner_chunk_shape.as_array())
+                        .map(|inner_chunk_shape| {
+                            inner_chunk_shape
+                                .iter()
+                                .map(|d| d.as_u64().unwrap())
+                                .collect()
+                        })
+                } else {
+                    None
+                }
+            }),
+            _ => None,
+        };
+
+        Ok::<_, String>((shape, data_type_str, shard_shape, inner_chunk_shape))
+    })?;
 
     // Create the shape vector
     let shape_arr = create_double_vector(&shape)?;
 
-    // Get data type as string (use the Zarr V3 name, e.g. "uint32")
-    let data_type_str = array
-        .data_type()
-        .name(ZarrVersion::V3)
-        .map(|name| name.into_owned())
-        .unwrap_or_else(|| format!("{}", array.data_type()));
     let data_type_cstr = CString::new(data_type_str).unwrap();
     let data_type_arr = unsafe { mxCreateString(data_type_cstr.as_ptr()) };
-
-    // Get chunk shape from chunk representation at origin
-    let chunk_origin: Vec<u64> = vec![0; ndim];
-    let shard_shape = zarrs_result_to_str_error(
-        array.chunk_shape(&chunk_origin),
-        "Error while determining chunk/shard shape",
-    )?
-    .to_array_shape();
-
-    // Get shard shape (from sharding codec if present, otherwise same as chunk)
-    let inner_chunk_shape: Option<Vec<u64>> = match array.metadata() {
-        zarrs::array::ArrayMetadata::V3(metadata) => metadata.codecs.iter().find_map(|codec| {
-            if codec.name() == "sharding_indexed" {
-                codec
-                    .configuration()
-                    .and_then(|configuration| configuration.get("chunk_shape"))
-                    .and_then(|inner_chunk_shape| inner_chunk_shape.as_array())
-                    .map(|inner_chunk_shape| {
-                        inner_chunk_shape
-                            .iter()
-                            .map(|d| d.as_u64().unwrap())
-                            .collect()
-                    })
-            } else {
-                None
-            }
-        }),
-        _ => None,
-    };
 
     // Create field names
     let field_shape = CString::new("shape").unwrap();

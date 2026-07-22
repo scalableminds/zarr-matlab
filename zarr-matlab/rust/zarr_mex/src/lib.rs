@@ -79,6 +79,24 @@ fn dispatch(nlhs: c_int, plhs: *mut MxArrayMut, nrhs: c_int, prhs: *const MxArra
             }
             lhs[0] = crate::info::info(rhs)?;
         }
+        "open" => {
+            if lhs.len() != 1 {
+                return Err(format!(
+                    "Invalid number of output arguments. Expected 1, got {}.",
+                    lhs.len()
+                ));
+            }
+            lhs[0] = open_handle(rhs)?;
+        }
+        "close" => {
+            if lhs.len() != 0 {
+                return Err(format!(
+                    "Invalid number of output arguments. Expected 0, got {}.",
+                    lhs.len()
+                ));
+            }
+            close_handle(rhs)?;
+        }
         _ => return Err(format!("Unknown command {:?}", command)),
     }
 

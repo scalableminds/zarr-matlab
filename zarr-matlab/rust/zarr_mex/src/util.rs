@@ -3,17 +3,24 @@ use ffi::*;
 use rayon::prelude::*;
 
 use std;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
 use std::slice;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use zarrs::array::data_type::{
     BoolDataType, Float32DataType, Float64DataType, Int16DataType, Int32DataType, Int64DataType,
     Int8DataType, UInt16DataType, UInt32DataType, UInt64DataType, UInt8DataType,
 };
-use zarrs::array::{ArraySubset, DataType};
-use zarrs::storage::{ReadableStorage, ReadableWritableListableStorage};
+use zarrs::array::{
+    Array, ArrayBytes, ArrayMetadata, ArrayMetadataOptions, ArraySubset, ChunkShapeTraits, DataType,
+};
+use zarrs::storage::{
+    ReadableStorage, ReadableStorageTraits, ReadableWritableListableStorage,
+    ReadableWritableListableStorageTraits,
+};
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -617,4 +624,225 @@ pub fn create_writable_store(path: &str) -> Result<ReadableWritableListableStora
         &format!("Error while opening (writable) local store at '{}'", path),
     )?;
     Ok(Arc::new(store))
+}
+
+// ---------------------------------------------------------------------------
+// Per-object open-array cache.
+//
+// `ZarrArray` (a MATLAB handle class) opens its backing array once and reuses
+// the resulting handle for all ops, freeing it in its `delete` destructor.
+// The mex ops accept either a path string (transient open, unchanged behavior)
+// or a numeric handle (cached), so direct-mex callers are unaffected.
+//
+// The cached array holds only metadata plus the store connection; chunk data
+// is still read fresh on every op, so reads stay correct. A `resize` through a
+// handle mutates the cached array in place, so the owning object always sees
+// its own changes.
+// ---------------------------------------------------------------------------
+
+// An opened array. Local paths open a writable array (usable for read + write);
+// HTTP opens a readable-only array.
+pub enum OpenedArray {
+    Writable(Array<dyn ReadableWritableListableStorageTraits>),
+    Readable(Array<dyn ReadableStorageTraits>),
+}
+
+impl OpenedArray {
+    pub fn shape(&self) -> &[u64] {
+        match self {
+            OpenedArray::Writable(a) => a.shape(),
+            OpenedArray::Readable(a) => a.shape(),
+        }
+    }
+
+    pub fn data_type(&self) -> &DataType {
+        match self {
+            OpenedArray::Writable(a) => a.data_type(),
+            OpenedArray::Readable(a) => a.data_type(),
+        }
+    }
+
+    pub fn metadata(&self) -> &ArrayMetadata {
+        match self {
+            OpenedArray::Writable(a) => a.metadata(),
+            OpenedArray::Readable(a) => a.metadata(),
+        }
+    }
+
+    pub fn chunk_shape_vec(&self, origin: &[u64]) -> Result<Vec<u64>> {
+        let cs = match self {
+            OpenedArray::Writable(a) => a.chunk_shape(origin),
+            OpenedArray::Readable(a) => a.chunk_shape(origin),
+        };
+        Ok(zarrs_result_to_str_error(cs, "Error while determining chunk/shard shape")?.to_array_shape())
+    }
+
+    pub fn retrieve_array_subset(&self, subset: &ArraySubset) -> Result<ArrayBytes<'static>> {
+        let r = match self {
+            OpenedArray::Writable(a) => a.retrieve_array_subset(subset),
+            OpenedArray::Readable(a) => a.retrieve_array_subset(subset),
+        };
+        zarrs_result_to_str_error(r, "Error while reading data from array")
+    }
+
+    pub fn store_array_subset(&self, subset: &ArraySubset, bytes: ArrayBytes) -> Result<()> {
+        match self {
+            OpenedArray::Writable(a) => {
+                zarrs_result_to_str_error(a.store_array_subset(subset, bytes), "Error while writing data")
+            }
+            OpenedArray::Readable(_) => {
+                Err("HTTP URLs are not supported for write operations".to_string())
+            }
+        }
+    }
+
+    pub fn resize_and_store(&mut self, new_shape: Vec<u64>) -> Result<()> {
+        match self {
+            OpenedArray::Writable(a) => {
+                zarrs_result_to_str_error(a.set_shape(new_shape), "Error while resizing array")?;
+                zarrs_result_to_str_error(
+                    a.store_metadata_opt(
+                        &ArrayMetadataOptions::default().with_include_zarrs_metadata(false),
+                    ),
+                    "Error while writing array metadata",
+                )
+            }
+            OpenedArray::Readable(_) => {
+                Err("HTTP URLs are not supported for write operations".to_string())
+            }
+        }
+    }
+}
+
+// Open an array without caching it (writable for local paths, readable for HTTP).
+fn open_opened_array(path: &str) -> Result<OpenedArray> {
+    if is_http_url(path) {
+        let store = create_readable_store(path)?;
+        let array =
+            zarrs_result_to_str_error(Array::open(store, "/"), "Error while opening array")?;
+        Ok(OpenedArray::Readable(array))
+    } else {
+        let store = create_writable_store(path)?;
+        let array =
+            zarrs_result_to_str_error(Array::open(store, "/"), "Error while opening array")?;
+        Ok(OpenedArray::Writable(array))
+    }
+}
+
+// Registry of cached open arrays keyed by an opaque handle. The outer mutex
+// guards the map only; each entry has its own mutex so the map lock is never
+// held during I/O. MATLAB serializes mex calls, so contention is nil.
+fn array_registry() -> &'static Mutex<HashMap<u64, Arc<Mutex<OpenedArray>>>> {
+    static REGISTRY: OnceLock<Mutex<HashMap<u64, Arc<Mutex<OpenedArray>>>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+static NEXT_HANDLE: AtomicU64 = AtomicU64::new(1);
+
+pub fn registry_open(path: &str) -> Result<u64> {
+    let opened = open_opened_array(path)?;
+    let handle = NEXT_HANDLE.fetch_add(1, Ordering::Relaxed);
+    array_registry()
+        .lock()
+        .unwrap()
+        .insert(handle, Arc::new(Mutex::new(opened)));
+    Ok(handle)
+}
+
+pub fn registry_close(handle: u64) {
+    array_registry().lock().unwrap().remove(&handle);
+}
+
+fn registry_get(handle: u64) -> Result<Arc<Mutex<OpenedArray>>> {
+    array_registry()
+        .lock()
+        .unwrap()
+        .get(&handle)
+        .cloned()
+        .ok_or_else(|| "Invalid or closed array handle".to_string())
+}
+
+// A resolved first argument: either a transient (uncached) open array or a
+// reference to a cached one.
+pub enum ArrayArg {
+    Transient(OpenedArray),
+    Cached(Arc<Mutex<OpenedArray>>),
+}
+
+impl ArrayArg {
+    pub fn with<R>(&self, f: impl FnOnce(&OpenedArray) -> R) -> R {
+        match self {
+            ArrayArg::Transient(a) => f(a),
+            ArrayArg::Cached(m) => {
+                let guard = m.lock().unwrap();
+                f(&guard)
+            }
+        }
+    }
+
+    pub fn with_mut<R>(&mut self, f: impl FnOnce(&mut OpenedArray) -> R) -> R {
+        match self {
+            ArrayArg::Transient(a) => f(a),
+            ArrayArg::Cached(m) => {
+                let mut guard = m.lock().unwrap();
+                f(&mut guard)
+            }
+        }
+    }
+}
+
+// True if `pm` is a MATLAB char array or string scalar (i.e. a path), as
+// opposed to a numeric array handle.
+fn is_string_like(pm: MxArray) -> bool {
+    let string_class = CString::new("string").unwrap();
+    unsafe { mxIsChar(pm) || mxIsClass(pm, string_class.as_ptr()) }
+}
+
+// Resolve the first mex argument to an array: a string opens transiently, a
+// numeric value looks up a cached handle.
+pub fn resolve_array_arg(pm: MxArray) -> Result<ArrayArg> {
+    if is_string_like(pm) {
+        let path = mx_array_to_str(pm)?;
+        Ok(ArrayArg::Transient(open_opened_array(path)?))
+    } else {
+        let buf = mx_array_to_f64_slice(pm)?;
+        let handle = *buf.first().ok_or("Empty array handle")? as u64;
+        Ok(ArrayArg::Cached(registry_get(handle)?))
+    }
+}
+
+// `open` op: open (and cache) an array by path, returning a numeric handle.
+pub fn open_handle(rhs: &[MxArray]) -> Result<MxArrayMut> {
+    if rhs.len() != 1 {
+        return Err(format!(
+            "Invalid number of input arguments. Expected 1 (path), got {}",
+            rhs.len()
+        ));
+    }
+    let path = mx_array_to_str(rhs[0])?;
+    let handle = registry_open(path)?;
+
+    let arr = create_numeric_array(&[1, 1], MxClassId::Double, MxComplexity::Real)?;
+    let ptr = unsafe { mxGetPr(arr) };
+    if ptr.is_null() {
+        return Err("Failed to allocate array handle".to_string());
+    }
+    unsafe {
+        *ptr = handle as f64;
+    }
+    Ok(arr)
+}
+
+// `close` op: drop a cached array by handle.
+pub fn close_handle(rhs: &[MxArray]) -> Result<()> {
+    if rhs.len() != 1 {
+        return Err(format!(
+            "Invalid number of input arguments. Expected 1 (handle), got {}",
+            rhs.len()
+        ));
+    }
+    let buf = mx_array_to_f64_slice(rhs[0])?;
+    let handle = *buf.first().ok_or("Empty array handle")? as u64;
+    registry_close(handle);
+    Ok(())
 }

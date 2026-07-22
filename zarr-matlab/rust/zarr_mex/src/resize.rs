@@ -1,20 +1,15 @@
-use zarrs::array::{Array, ArrayMetadataOptions};
-
 use crate::ffi::*;
 use crate::util::*;
 
 pub(crate) fn resize(rhs: &[MxArray]) -> Result<()> {
     if rhs.len() != 2 {
         return Err(format!(
-            "Invalid number of input arguments. Expected 2 (path, shape), got {}",
+            "Invalid number of input arguments. Expected 2 (array, shape), got {}",
             rhs.len()
         ));
     }
 
-    let store_str = rhs[0];
     let shape_arr = rhs[1];
-
-    let path = mx_array_to_str(store_str)?;
 
     // Parse shape from MATLAB array
     let shape_f64 = mx_array_to_f64_slice(shape_arr)?;
@@ -23,21 +18,8 @@ pub(crate) fn resize(rhs: &[MxArray]) -> Result<()> {
         .map(|&x| as_nat(x))
         .collect::<Result<Vec<u64>>>()?;
 
-    // Open the array
-    let store = create_writable_store(path)?;
-    let mut array =
-        zarrs_result_to_str_error(Array::open(store, "/"), "Error while opening array")?;
-
-    // Resize the array
-    zarrs_result_to_str_error(array.set_shape(new_shape), "Error while resizing array")?;
-
-    // Store the updated metadata
-    zarrs_result_to_str_error(
-        array.store_metadata_opt(
-            &ArrayMetadataOptions::default().with_include_zarrs_metadata(false),
-        ),
-        "Error while writing array metadata",
-    )?;
-
-    Ok(())
+    // Resize the array. For a cached handle this mutates the cached array in
+    // place, so the owning object immediately sees the new shape.
+    let mut arg = resolve_array_arg(rhs[0])?;
+    arg.with_mut(|array| array.resize_and_store(new_shape))
 }

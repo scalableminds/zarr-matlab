@@ -2,6 +2,13 @@ classdef ZarrArray < ZarrNode
     % ZARRARRAY Zarr v3 array for reading and writing chunked array data
     %   A ZarrArray represents a chunked, compressed N-dimensional array.
 
+    properties (Access = private, Transient)
+        % Cached mex array handle, opened lazily on first use and released in
+        % the destructor. Transient so a save/loaded object re-opens lazily
+        % rather than carrying a stale handle from another session.
+        handle = []
+    end
+
     methods (Static)
         function arr = create(path, shape, dataType, varargin)
             % CREATE Create a new Zarr array
@@ -379,6 +386,18 @@ classdef ZarrArray < ZarrNode
             obj.path = path;
         end
 
+        function delete(obj)
+            % DELETE Destructor: release the cached mex array handle.
+            if ~isempty(obj.handle)
+                try
+                    zarrMex('close', obj.handle);
+                catch
+                    % Never throw from a destructor (e.g. after `clear mex`).
+                end
+                obj.handle = [];
+            end
+        end
+
         function info = info(obj)
             % INFO Get information about the array
             %   info = arr.info()
@@ -389,7 +408,7 @@ classdef ZarrArray < ZarrNode
             %     chunkShape  - Chunk shape vector
             %     shardShape  - Shard shape vector (same as chunkShape if not sharded)
 
-            info = zarrMex('info', obj.path);
+            info = zarrMex('info', obj.getHandle());
         end
 
         function shape = shape(obj)
@@ -415,7 +434,7 @@ classdef ZarrArray < ZarrNode
             %   Arguments:
             %     newShape - New shape as a vector, e.g. [200, 200, 200]
 
-            zarrMex('resize', obj.path, newShape);
+            zarrMex('resize', obj.getHandle(), newShape);
         end
 
         function data = read(obj, bbox)
@@ -431,13 +450,14 @@ classdef ZarrArray < ZarrNode
             %   Returns:
             %     data - Array data from the specified region
 
+            h = obj.getHandle();
             if nargin < 2 || isempty(bbox)
                 % Read entire array. The mex derives the whole-array region
                 % from the opened array itself, so we avoid a separate
                 % obj.shape() open just to build the bbox here.
-                data = zarrMex('read', obj.path);
+                data = zarrMex('read', h);
             else
-                data = zarrMex('read', obj.path, bbox);
+                data = zarrMex('read', h, bbox);
             end
         end
 
@@ -477,7 +497,7 @@ classdef ZarrArray < ZarrNode
                 % Fast path: write at origin, letting the mex derive the region
                 % from the data's own dimensions. Avoids a separate obj.shape()
                 % open just to build the bbox.
-                zarrMex('write', obj.path, data);
+                zarrMex('write', obj.getHandle(), data);
                 return;
             end
 
@@ -503,7 +523,17 @@ classdef ZarrArray < ZarrNode
                 end
             end
 
-            zarrMex('write', obj.path, bbox, data);
+            zarrMex('write', obj.getHandle(), bbox, data);
+        end
+    end
+
+    methods (Access = private)
+        function h = getHandle(obj)
+            % GETHANDLE Lazily open the array and cache its mex handle.
+            if isempty(obj.handle)
+                obj.handle = zarrMex('open', obj.path);
+            end
+            h = obj.handle;
         end
     end
 end

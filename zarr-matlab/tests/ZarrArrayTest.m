@@ -43,6 +43,31 @@ classdef ZarrArrayTest < matlab.unittest.TestCase
             testCase.verifyEqual(info.chunkShape, [32, 32, 32]);
         end
 
+        function testHandleLifecycle(testCase)
+            % Exercises the per-object handle cache: open -> reuse -> close
+            % (via destructor) -> reopen on a fresh object.
+            arrayPath = fullfile(testCase.TempDir, 'handle_lifecycle');
+
+            arr = ZarrArray.create(arrayPath, [40, 50], 'uint16', 'chunkShape', [16, 16]);
+
+            testData = uint16(randi(65535, [40, 50]));
+            arr.write(testData);
+
+            % Repeated reads on the same (cached) object return identical data
+            first = arr.read();
+            second = arr.read();
+            testCase.verifyEqual(first, testData);
+            testCase.verifyEqual(second, testData);
+
+            % Destroy the object -> destructor closes the cached handle
+            delete(arr);
+
+            % A fresh object on the same path opens a new handle and still reads
+            arr2 = ZarrArray(arrayPath);
+            reread = arr2.read();
+            testCase.verifyEqual(reread, testData);
+        end
+
         function testCreate1DArray(testCase)
             arrayPath = fullfile(testCase.TempDir, 'class_1d');
 
