@@ -6,8 +6,11 @@ use std::path::PathBuf;
 use std::slice;
 use std::sync::Arc;
 
-use zarrs::array::data_type::DataType;
-use zarrs::array_subset::ArraySubset;
+use zarrs::array::data_type::{
+    BoolDataType, Float32DataType, Float64DataType, Int16DataType, Int32DataType, Int64DataType,
+    Int8DataType, UInt16DataType, UInt32DataType, UInt64DataType, UInt8DataType,
+};
+use zarrs::array::{ArraySubset, DataType};
 use zarrs::storage::{ReadableStorage, ReadableWritableListableStorage, StoreKey};
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -357,22 +360,31 @@ pub fn zarrs_result_to_str_error<T, E: std::error::Error>(
 }
 
 pub fn zarrs_data_type_to_mx(data_type: &DataType) -> Result<MxClassId> {
-    Ok(match data_type {
-        DataType::UInt8 => MxClassId::Uint8,
-        DataType::UInt16 => MxClassId::Uint16,
-        DataType::UInt32 => MxClassId::Uint32,
-        DataType::UInt64 => MxClassId::Uint64,
-        DataType::Float32 => MxClassId::Single,
-        DataType::Float64 => MxClassId::Double,
-        DataType::Int8 => MxClassId::Int8,
-        DataType::Int16 => MxClassId::Int16,
-        DataType::Int32 => MxClassId::Int32,
-        DataType::Int64 => MxClassId::Int64,
-        DataType::Bool => MxClassId::Logical,
-        _ => {
-            return Err("Unsupported data type".to_string());
-        }
-    })
+    if data_type.is::<UInt8DataType>() {
+        Ok(MxClassId::Uint8)
+    } else if data_type.is::<UInt16DataType>() {
+        Ok(MxClassId::Uint16)
+    } else if data_type.is::<UInt32DataType>() {
+        Ok(MxClassId::Uint32)
+    } else if data_type.is::<UInt64DataType>() {
+        Ok(MxClassId::Uint64)
+    } else if data_type.is::<Float32DataType>() {
+        Ok(MxClassId::Single)
+    } else if data_type.is::<Float64DataType>() {
+        Ok(MxClassId::Double)
+    } else if data_type.is::<Int8DataType>() {
+        Ok(MxClassId::Int8)
+    } else if data_type.is::<Int16DataType>() {
+        Ok(MxClassId::Int16)
+    } else if data_type.is::<Int32DataType>() {
+        Ok(MxClassId::Int32)
+    } else if data_type.is::<Int64DataType>() {
+        Ok(MxClassId::Int64)
+    } else if data_type.is::<BoolDataType>() {
+        Ok(MxClassId::Logical)
+    } else {
+        Err("Unsupported data type".to_string())
+    }
 }
 
 pub fn is_http_url(path: &str) -> bool {

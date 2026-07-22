@@ -1,4 +1,4 @@
-use zarrs::array::Array;
+use zarrs::array::{Array, ArrayBytes};
 
 use crate::ffi::*;
 use crate::util::*;
@@ -49,9 +49,10 @@ pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
 
     let data_bytes = copy_as_c_order(data_arr, &bbox.shape, type_size)?;
 
-    // write data
+    // write data (wrap raw bytes so they are stored as-is, not reinterpreted as
+    // typed `u8` elements)
     zarrs_result_to_str_error(
-        array.store_array_subset(&subset, data_bytes),
+        array.store_array_subset(&subset, ArrayBytes::new_flen(data_bytes)),
         "Error while writing data",
     )?;
 

@@ -1,4 +1,5 @@
-use zarrs::array::Array;
+use zarrs::array::{Array, ChunkShapeTraits};
+use zarrs::plugin::{ExtensionName, ZarrVersion};
 
 use std::ffi::CString;
 
@@ -41,8 +42,12 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
     // Create the shape vector
     let shape_arr = create_double_vector(&shape)?;
 
-    // Get data type as string
-    let data_type_str = format!("{}", array.data_type());
+    // Get data type as string (use the Zarr V3 name, e.g. "uint32")
+    let data_type_str = array
+        .data_type()
+        .name(ZarrVersion::V3)
+        .map(|name| name.into_owned())
+        .unwrap_or_else(|| format!("{}", array.data_type()));
     let data_type_cstr = CString::new(data_type_str).unwrap();
     let data_type_arr = unsafe { mxCreateString(data_type_cstr.as_ptr()) };
 

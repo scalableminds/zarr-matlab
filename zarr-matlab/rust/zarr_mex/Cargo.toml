@@ -5,7 +5,7 @@ authors = ["Norman Rzepka <norman.rzepka@scalableminds.com>", "Alessandro Motta 
 build = "build.rs"
 
 [dependencies]
-zarrs = "0.22"
+zarrs = "0.23"
 libc = "0.2"
 serde_json = "1.0"
 zarrs_http = "0.3.1"

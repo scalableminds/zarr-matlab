@@ -1,4 +1,4 @@
-use zarrs::array::Array;
+use zarrs::array::{Array, ArrayBytes};
 
 use crate::ffi::*;
 use crate::util::*;
@@ -39,7 +39,7 @@ pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
     let mat_class = zarrs_data_type_to_mx(&array.data_type())?;
 
     // read data
-    let data_all = zarrs_result_to_str_error(
+    let data_all: ArrayBytes = zarrs_result_to_str_error(
         array.retrieve_array_subset(&subset),
         "Error while reading data from array",
     )?;

@@ -261,6 +261,10 @@ classdef ZarrArray < ZarrNode
                 if strcmp(name, 'blosc') && ~isfield(config, 'typesize')
                     config.typesize = ZarrArray.getTypeSize(dataType);
                 end
+                % For zstd, the Zarr V3 codec requires a 'checksum' field
+                if strcmp(name, 'zstd') && ~isfield(config, 'checksum')
+                    config.checksum = false;
+                end
             end
 
             if isempty(config)
@@ -274,7 +278,7 @@ classdef ZarrArray < ZarrNode
             % GETDEFAULTCODECCONFIG Get default configuration for a codec
             switch codecName
                 case 'zstd'
-                    config = struct('level', 3);
+                    config = struct('level', 3, 'checksum', false);
                 case 'gzip'
                     config = struct('level', 5);
                 case 'blosc'
