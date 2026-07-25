@@ -12,7 +12,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-15-intel, macos-latest, windows-latest]
+        # Intel macOS is only supported up to R2025b; newer releases fail to
+        # install on the macos-15-intel runner. Everyone else uses the latest.
+        include:
+          - os: macos-15-intel
+            release: R2025b
 
     runs-on: ${{ matrix.os }}
 
@@ -21,6 +26,8 @@ jobs:
 
       - name: Setup MATLAB
         uses: matlab-actions/setup-matlab@v2
+        with:
+          release: ${{ matrix.release || 'latest' }}
 
       - name: Run zarrBuild
         uses: matlab-actions/run-command@v2
