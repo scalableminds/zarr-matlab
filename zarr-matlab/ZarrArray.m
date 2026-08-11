@@ -1,6 +1,9 @@
 classdef ZarrArray < ZarrNode
-    % ZARRARRAY Zarr v3 array for reading and writing chunked array data
+    % ZARRARRAY Zarr array for reading and writing chunked array data
     %   A ZarrArray represents a chunked, compressed N-dimensional array.
+    %   Existing arrays are opened in either Zarr v3 or v2 format, detected
+    %   from the metadata on disk. New arrays default to v3; pass
+    %   'zarrFormat', 2 to create v2 arrays.
 
     properties (Access = private, Transient)
         % Cached mex array handle, opened lazily on first use and released in
@@ -49,6 +52,12 @@ classdef ZarrArray < ZarrNode
             %                   - String: '/' or '.' for separator (uses 'default' name)
             %                   - Struct with 'name' ('default' or 'v2') and optional 'separator'
             %                   Default: struct('name', 'default', 'separator', '/')
+            %                   For zarrFormat 2 only the separator applies, and it
+            %                   becomes the 'dimension_separator' field.
+            %     zarrFormat  - Zarr format version to create: 2 or 3. Default: 3
+            %                   Zarr v2 has no sharding and a single compressor;
+            %                   'filters' selects the chunk byte order instead of a
+            %                   transpose codec (default order 'F', 'none' means 'C').
 
             p = inputParser;
             addParameter(p, 'chunkShape', [], @isnumeric);
@@ -57,6 +66,7 @@ classdef ZarrArray < ZarrNode
             addParameter(p, 'compressors', 'zstd', @(x) ischar(x) || isstring(x) || isstruct(x) || iscell(x));
             addParameter(p, 'fillValue', [], @(x) isempty(x) || isnumeric(x) || islogical(x));
             addParameter(p, 'chunkKeyEncoding', [], @(x) isempty(x) || ischar(x) || isstring(x) || isstruct(x));
+            addParameter(p, 'zarrFormat', 3, @(x) isnumeric(x) && isscalar(x) && ismember(x, [2, 3]));
             parse(p, varargin{:});
 
             chunkShape = p.Results.chunkShape;
@@ -67,7 +77,6 @@ classdef ZarrArray < ZarrNode
             shardShape = p.Results.shardShape;
             filtersParam = p.Results.filters;
             compressorsParam = p.Results.compressors;
-            useSharding = ~isempty(shardShape);
 
             % Set default fill value based on data type
             if isempty(p.Results.fillValue)
@@ -79,7 +88,67 @@ classdef ZarrArray < ZarrNode
             else
                 fillValue = p.Results.fillValue;
             end
+
+            if p.Results.zarrFormat == 2
+                json = ZarrArray.buildMetadataJsonV2(shape, dataType, chunkShape, ...
+                    shardShape, filtersParam, compressorsParam, fillValue, ...
+                    p.Results.chunkKeyEncoding);
+            else
+                json = ZarrArray.buildMetadataJsonV3(shape, dataType, chunkShape, ...
+                    shardShape, filtersParam, compressorsParam, fillValue, ...
+                    p.Results.chunkKeyEncoding);
+            end
+
+            zarrMex('create', path, json);
+            arr = ZarrArray(path);
+        end
+
+        function arr = createFromData(path, data, varargin)
+            % CREATEFROMDATA Create a new Zarr array from existing data
+            %   arr = ZarrArray.createFromData(path, data)
+            %   arr = ZarrArray.createFromData(path, data, 'chunkShape', [32, 32, 32])
+            %   arr = ZarrArray.createFromData(path, data, 'compressors', 'zstd')
+            %
+            %   Arguments:
+            %     path - Path where the array will be created
+            %     data - MATLAB array to store (data type and shape are inferred)
+            %
+            %   Optional Name-Value Arguments:
+            %     chunkShape  - Chunk shape as a vector, e.g. [32, 32, 32]
+            %                   Default: min(shape, 100) per dimension
+            %     shardShape  - Shard shape for sharded arrays (enables sharding codec)
+            %     filters     - Filter codecs (default: transpose, use 'none' to disable)
+            %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
+            %     fillValue   - Fill value for uninitialized chunks
+            %                   (default: false for bool, 0 for numeric types)
+            %     chunkKeyEncoding - Chunk key encoding ('/' or '.' or struct)
+            %     zarrFormat  - Zarr format version to create: 2 or 3 (default: 3)
+            %
+            %   Example:
+            %     data = uint16(rand(100, 100, 100) * 65535);
+            %     arr = ZarrArray.createFromData('/path/to/array', data, 'compressors', 'zstd');
+
+            % Infer shape from data
+            shape = size(data);
+
+            % Infer data type from data
+            dataType = ZarrArray.matlabClassToZarrType(class(data));
+
+            % Create array and write data
+            arr = ZarrArray.create(path, shape, dataType, varargin{:});
+
+            % Write the data at origin
+            arr.write(data);
+        end
+    end
+
+    methods (Static, Access = private)
+        function json = buildMetadataJsonV3(shape, dataType, chunkShape, shardShape, ...
+                filtersParam, compressorsParam, fillValue, chunkKeyEncodingParam)
+            % BUILDMETADATAJSONV3 Build Zarr v3 zarr.json array metadata as JSON
+
             ndim = numel(shape);
+            useSharding = ~isempty(shardShape);
 
             % Build filter codecs (default: transpose for Fortran order)
             if isempty(filtersParam)
@@ -126,7 +195,7 @@ classdef ZarrArray < ZarrNode
                 );
 
             % Build chunk key encoding
-            chunkKeyEncoding = ZarrArray.buildChunkKeyEncoding(p.Results.chunkKeyEncoding);
+            chunkKeyEncoding = ZarrArray.buildChunkKeyEncoding(chunkKeyEncodingParam);
 
             json = jsonencode(struct( ...
                 'zarr_format', 3, ...
@@ -138,50 +207,257 @@ classdef ZarrArray < ZarrNode
                 'fill_value', fillValue, ...
                 'codecs', codecs ...
                 ));
-
-            zarrMex('create', path, json);
-            arr = ZarrArray(path);
         end
 
-        function arr = createFromData(path, data, varargin)
-            % CREATEFROMDATA Create a new Zarr array from existing data
-            %   arr = ZarrArray.createFromData(path, data)
-            %   arr = ZarrArray.createFromData(path, data, 'chunkShape', [32, 32, 32])
-            %   arr = ZarrArray.createFromData(path, data, 'compressors', 'zstd')
-            %
-            %   Arguments:
-            %     path - Path where the array will be created
-            %     data - MATLAB array to store (data type and shape are inferred)
-            %
-            %   Optional Name-Value Arguments:
-            %     chunkShape  - Chunk shape as a vector, e.g. [32, 32, 32]
-            %                   Default: min(shape, 100) per dimension
-            %     shardShape  - Shard shape for sharded arrays (enables sharding codec)
-            %     filters     - Filter codecs (default: transpose, use 'none' to disable)
-            %     compressors - Compression codecs (default: 'zstd', use 'none' to disable)
-            %     fillValue   - Fill value for uninitialized chunks
-            %                   (default: false for bool, 0 for numeric types)
-            %     chunkKeyEncoding - Chunk key encoding ('/' or '.' or struct)
-            %
-            %   Example:
-            %     data = uint16(rand(100, 100, 100) * 65535);
-            %     arr = ZarrArray.createFromData('/path/to/array', data, 'compressors', 'zstd');
+        function json = buildMetadataJsonV2(shape, dataType, chunkShape, shardShape, ...
+                filtersParam, compressorsParam, fillValue, chunkKeyEncodingParam)
+            % BUILDMETADATAJSONV2 Build Zarr v2 .zarray array metadata as JSON
 
-            % Infer shape from data
-            shape = size(data);
+            if ~isempty(shardShape)
+                error('zarr:error', ['Sharding is not supported by Zarr v2. Omit ' ...
+                    '''shardShape'' or use ''zarrFormat'', 3.']);
+            end
 
-            % Infer data type from data
-            dataType = ZarrArray.matlabClassToZarrType(class(data));
+            [filters, order] = ZarrArray.buildFiltersAndOrderV2(filtersParam);
+            compressor = ZarrArray.buildCompressorV2(compressorsParam);
+            separator = ZarrArray.buildDimensionSeparatorV2(chunkKeyEncodingParam);
 
-            % Create array and write data
-            arr = ZarrArray.create(path, shape, dataType, varargin{:});
-
-            % Write the data at origin
-            arr.write(data);
+            % 'compressor' is a required field in the v2 metadata schema, so an
+            % absent compressor has to be written as an explicit JSON null.
+            % jsonencode renders NaN as null (its ConvertInfAndNaN default),
+            % which is how buildCompressorV2 and buildFiltersAndOrderV2 signal
+            % absence. Single braces around each value keep struct() from
+            % expanding cell arrays into a struct array.
+            json = jsonencode(struct( ...
+                'zarr_format', 2, ...
+                'shape', {num2cell(shape)}, ...
+                'chunks', {num2cell(chunkShape)}, ...
+                'dtype', ZarrArray.zarrTypeToDtypeV2(dataType), ...
+                'compressor', {compressor}, ...
+                'fill_value', {ZarrArray.fillValueForV2(fillValue)}, ...
+                'order', order, ...
+                'filters', {filters}, ...
+                'dimension_separator', separator ...
+                ));
         end
-    end
 
-    methods (Static, Access = private)
+        function dtype = zarrTypeToDtypeV2(dataType)
+            % ZARRTYPETODTYPEV2 Convert a Zarr data type name to a v2 dtype string
+            %   Single-byte types take the '|' (not applicable) endianness prefix;
+            %   multi-byte types are written little-endian, matching the endian
+            %   configuration the v3 path gives its bytes codec.
+
+            switch dataType
+                case 'bool'
+                    dtype = '|b1';
+                case 'uint8'
+                    dtype = '|u1';
+                case 'int8'
+                    dtype = '|i1';
+                case 'uint16'
+                    dtype = '<u2';
+                case 'int16'
+                    dtype = '<i2';
+                case 'uint32'
+                    dtype = '<u4';
+                case 'int32'
+                    dtype = '<i4';
+                case 'uint64'
+                    dtype = '<u8';
+                case 'int64'
+                    dtype = '<i8';
+                case 'float32'
+                    dtype = '<f4';
+                case 'float64'
+                    dtype = '<f8';
+                otherwise
+                    error('zarr:error', 'Unsupported data type for Zarr v2: %s', dataType);
+            end
+        end
+
+        function value = fillValueForV2(fillValue)
+            % FILLVALUEFORV2 Encode a fill value for Zarr v2 metadata
+            %   jsonencode maps NaN and +/-Inf to null, but in v2 a null fill
+            %   value means "no fill value at all", so non-finite floats are
+            %   written using the spec's string forms instead.
+
+            if isnumeric(fillValue) && isscalar(fillValue) && ~isfinite(fillValue)
+                if isnan(fillValue)
+                    value = 'NaN';
+                elseif fillValue > 0
+                    value = 'Infinity';
+                else
+                    value = '-Infinity';
+                end
+            else
+                value = fillValue;
+            end
+        end
+
+        function [filters, order] = buildFiltersAndOrderV2(filtersParam)
+            % BUILDFILTERSANDORDERV2 Map the filters parameter onto v2 filters and order
+            %   Zarr v2 has no transpose codec: the byte layout within a chunk is
+            %   set by the 'order' field instead. The default therefore mirrors the
+            %   v3 path's transpose filter by writing Fortran order, while an
+            %   explicit filter list (or 'none') falls back to C order.
+            %
+            %   Returns NaN for the filters when there are none, which jsonencode
+            %   writes as JSON null.
+
+            if isempty(filtersParam)
+                filters = NaN;
+                order = 'F';
+                return;
+            end
+
+            if (ischar(filtersParam) || isstring(filtersParam)) && strcmp(char(filtersParam), 'none')
+                filters = NaN;
+                order = 'C';
+                return;
+            end
+
+            if iscell(filtersParam)
+                specs = filtersParam;
+            else
+                specs = { filtersParam };
+            end
+
+            if isempty(specs)
+                filters = NaN;
+                order = 'C';
+                return;
+            end
+
+            filters = cell(1, numel(specs));
+            for i = 1:numel(specs)
+                filters{i} = ZarrArray.buildCodecV2(specs{i});
+            end
+            order = 'C';
+        end
+
+        function compressor = buildCompressorV2(compressorsParam)
+            % BUILDCOMPRESSORV2 Map the compressors parameter onto the v2 compressor
+            %   Zarr v2 has a single compressor slot, so a sequence is rejected.
+            %   Returns NaN when there is no compressor, which jsonencode writes
+            %   as JSON null.
+
+            if isempty(compressorsParam)
+                compressor = NaN;
+                return;
+            end
+
+            if (ischar(compressorsParam) || isstring(compressorsParam)) ...
+                    && strcmp(char(compressorsParam), 'none')
+                compressor = NaN;
+                return;
+            end
+
+            if iscell(compressorsParam)
+                if isempty(compressorsParam)
+                    compressor = NaN;
+                    return;
+                end
+                if numel(compressorsParam) > 1
+                    error('zarr:error', ['Zarr v2 supports a single compressor, got %d. ' ...
+                        'Use ''zarrFormat'', 3 for a codec sequence.'], numel(compressorsParam));
+                end
+                compressor = ZarrArray.buildCodecV2(compressorsParam{1});
+                return;
+            end
+
+            compressor = ZarrArray.buildCodecV2(compressorsParam);
+        end
+
+        function codec = buildCodecV2(codecParam)
+            % BUILDCODECV2 Build a v2 numcodecs metadata struct from a codec spec
+            %   Zarr v2 codec metadata is flat: the codec name lives in an 'id'
+            %   field and its configuration keys sit alongside it, rather than
+            %   nested under 'configuration' as in v3.
+
+            if ischar(codecParam) || isstring(codecParam)
+                name = char(codecParam);
+                config = [];
+            elseif isstruct(codecParam)
+                if ~isfield(codecParam, 'name')
+                    error('zarr:error', 'Codec struct must have a ''name'' field');
+                end
+                name = codecParam.name;
+                if isfield(codecParam, 'configuration')
+                    config = codecParam.configuration;
+                else
+                    config = [];
+                end
+            else
+                error('zarr:error', 'Codec must be a string or struct');
+            end
+
+            if ismember(name, {'transpose', 'bytes', 'crc32c', 'sharding_indexed'})
+                error('zarr:error', ['The ''%s'' codec is Zarr v3 only. In v2 the byte order ' ...
+                    'comes from the dtype and the chunk layout from the ''order'' field.'], name);
+            end
+
+            if isempty(config)
+                config = ZarrArray.getDefaultCodecConfigV2(name);
+            end
+
+            codec = struct('id', name);
+            if ~isempty(config)
+                names = fieldnames(config);
+                for i = 1:numel(names)
+                    codec.(names{i}) = config.(names{i});
+                end
+            end
+        end
+
+        function config = getDefaultCodecConfigV2(codecName)
+            % GETDEFAULTCODECCONFIGV2 Get default numcodecs configuration for a codec
+            %   This cannot reuse getDefaultCodecConfig: numcodecs blosc takes an
+            %   integer 'shuffle' (0 none, 1 byte-wise, 2 bit-wise) rather than the
+            %   v3 string form, and takes no 'typesize'.
+
+            switch codecName
+                case 'zstd'
+                    config = struct('level', 3);
+                case {'gzip', 'zlib'}
+                    config = struct('level', 5);
+                case 'bz2'
+                    config = struct('level', 1);
+                case 'blosc'
+                    config = struct('cname', 'lz4', 'clevel', 5, 'shuffle', 0, 'blocksize', 0);
+                otherwise
+                    config = [];
+            end
+        end
+
+        function separator = buildDimensionSeparatorV2(param)
+            % BUILDDIMENSIONSEPARATORV2 Map chunkKeyEncoding onto dimension_separator
+            %   Zarr v2 chunk keys are always flat, so only the separator is
+            %   configurable. Defaults to '/' to match the v3 path's default.
+
+            if isempty(param)
+                separator = '/';
+            elseif ischar(param) || isstring(param)
+                separator = char(param);
+            elseif isstruct(param)
+                if isfield(param, 'name') && ~ismember(param.name, {'default', 'v2'})
+                    error('zarr:error', ['Zarr v2 supports only a chunk key separator, got ' ...
+                        'chunk key encoding ''%s''.'], param.name);
+                end
+                if isfield(param, 'separator')
+                    separator = char(param.separator);
+                else
+                    separator = '/';
+                end
+            else
+                error('zarr:error', 'chunkKeyEncoding must be a string or struct');
+            end
+
+            if ~ismember(separator, {'/', '.'})
+                error('zarr:error', ...
+                    'Chunk key separator must be ''/'' or ''.'', got ''%s''.', separator);
+            end
+        end
+
         function chunkShape = defaultChunkShape(shape)
             % DEFAULTCHUNKSHAPE Compute default chunk shape as min(shape, 100) per dimension
             chunkShape = min(shape, 100);
@@ -407,6 +683,7 @@ classdef ZarrArray < ZarrNode
             %     dataType    - Data type string
             %     chunkShape  - Chunk shape vector
             %     shardShape  - Shard shape vector (same as chunkShape if not sharded)
+            %     zarrFormat  - Zarr format version of the array on disk (2 or 3)
 
             info = zarrMex('info', obj.getHandle());
         end
@@ -425,6 +702,14 @@ classdef ZarrArray < ZarrNode
 
             info = obj.info();
             dt = info.dataType;
+        end
+
+        function format = zarrFormat(obj)
+            % ZARRFORMAT Get the Zarr format version of the array (2 or 3)
+            %   format = arr.zarrFormat()
+
+            info = obj.info();
+            format = info.zarrFormat;
         end
 
         function resize(obj, newShape)

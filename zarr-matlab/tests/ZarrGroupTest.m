@@ -230,6 +230,118 @@ classdef ZarrGroupTest < matlab.unittest.TestCase
             testCase.verifyEqual(grp2.getAttribute('key'), 'value');
         end
 
+        % Zarr v2 Tests
+
+        function testCreateV2(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_create_v2');
+
+            grp = ZarrGroup.create(groupPath, 'zarrFormat', 2);
+
+            % v2 groups are a bare .zgroup, with no v3 zarr.json
+            testCase.verifyTrue(isfile(fullfile(groupPath, '.zgroup')));
+            testCase.verifyFalse(isfile(fullfile(groupPath, 'zarr.json')));
+
+            metadata = jsondecode(fileread(fullfile(groupPath, '.zgroup')));
+            testCase.verifyEqual(metadata.zarr_format, 2);
+            testCase.verifyEqual(grp.zarrFormat(), 2);
+        end
+
+        function testOpenV2(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_open_v2');
+            ZarrGroup.create(groupPath, 'zarrFormat', 2);
+
+            grp = ZarrGroup(groupPath);
+
+            testCase.verifyEqual(grp.path, groupPath);
+            testCase.verifyEqual(grp.zarrFormat(), 2);
+        end
+
+        function testOpenV2WithStringZarrFormat(testCase)
+            % Some writers emit {"zarr_format": "2"} rather than a number
+            groupPath = fullfile(testCase.TempDir, 'group_v2_string_format');
+            mkdir(groupPath);
+            fid = fopen(fullfile(groupPath, '.zgroup'), 'w');
+            fprintf(fid, '%s', '{"zarr_format": "2"}');
+            fclose(fid);
+
+            grp = ZarrGroup(groupPath);
+
+            testCase.verifyEqual(grp.zarrFormat(), 2);
+        end
+
+        function testV2ChildrenInheritFormat(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_v2_inherit');
+            grp = ZarrGroup.create(groupPath, 'zarrFormat', 2);
+
+            subgrp = grp.createGroup('subgroup');
+            arr = grp.createArray('data', [32, 32], 'uint16', 'chunkShape', [16, 16]);
+
+            testCase.verifyEqual(subgrp.zarrFormat(), 2);
+            testCase.verifyEqual(arr.zarrFormat(), 2);
+            testCase.verifyTrue(isfile(fullfile(groupPath, 'subgroup', '.zgroup')));
+            testCase.verifyTrue(isfile(fullfile(groupPath, 'data', '.zarray')));
+        end
+
+        function testV2ChildFormatOverride(testCase)
+            % An explicit zarrFormat always beats the inherited one
+            groupPath = fullfile(testCase.TempDir, 'group_v2_override');
+            grp = ZarrGroup.create(groupPath, 'zarrFormat', 2);
+
+            arr = grp.createArray('v3data', [32, 32], 'uint16', ...
+                'chunkShape', [16, 16], 'zarrFormat', 3);
+
+            testCase.verifyEqual(arr.zarrFormat(), 3);
+            testCase.verifyTrue(isfile(fullfile(groupPath, 'v3data', 'zarr.json')));
+
+            % inputParser matches parameter names case-insensitively and
+            % partially, so those spellings must override too rather than
+            % colliding with the inherited value
+            other = grp.createArray('v3other', [32, 32], 'uint16', ...
+                'chunkShape', [16, 16], 'zarrformat', 3);
+            testCase.verifyEqual(other.zarrFormat(), 3);
+
+            partial = grp.createGroup('v3partial', 'zarrForm', 3);
+            testCase.verifyEqual(partial.zarrFormat(), 3);
+        end
+
+        function testV2CreateArrayFromData(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_v2_from_data');
+            grp = ZarrGroup.create(groupPath, 'zarrFormat', 2);
+
+            testData = uint32(randi(1000000, [40, 30, 20]));
+            arr = grp.createArrayFromData('mydata', testData, 'chunkShape', [16, 16, 16]);
+
+            testCase.verifyEqual(arr.zarrFormat(), 2);
+            testCase.verifyEqual(arr.read(), testData);
+        end
+
+        function testV2Attributes(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_v2_attrs');
+            grp = ZarrGroup.create(groupPath, 'zarrFormat', 2);
+
+            grp.setAttribute('key', 'value');
+
+            testCase.verifyTrue(isfile(fullfile(groupPath, '.zattrs')));
+            testCase.verifyEqual(ZarrGroup(groupPath).getAttribute('key'), 'value');
+        end
+
+        function testListMixedFormats(testCase)
+            groupPath = fullfile(testCase.TempDir, 'group_list_mixed');
+            grp = ZarrGroup.create(groupPath);
+
+            grp.createGroup('v3group', 'zarrFormat', 3);
+            grp.createGroup('v2group', 'zarrFormat', 2);
+            grp.createArray('v3array', [10, 10], 'uint8', 'chunkShape', [10, 10], 'zarrFormat', 3);
+            grp.createArray('v2array', [10, 10], 'uint8', 'chunkShape', [10, 10], 'zarrFormat', 2);
+
+            names = grp.list();
+            testCase.verifyEqual(sort(names), {'v2array', 'v2group', 'v3array', 'v3group'});
+
+            [groups, arrays] = grp.listContents();
+            testCase.verifyEqual(sort(groups), {'v2group', 'v3group'});
+            testCase.verifyEqual(sort(arrays), {'v2array', 'v3array'});
+        end
+
         % Error Tests
 
         function testOpenNonExistent(testCase)
