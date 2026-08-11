@@ -40,6 +40,28 @@ jobs:
           source-folder: zarr-matlab
           select-by-folder: zarr-matlab/tests
 
+      # zarr-python interop tests: on ubuntu-latest only. They validate
+      # on-disk format compatibility, not OS-specific behavior, and they need
+      # a real zarr-python install (via uv, matching zarr-matlab/interop-tests)
+      # that the other 3 legs don't have -- see zarr-matlab/interop-tests/README.md.
+      - name: Setup uv (interop tests)
+        if: matrix.os == 'ubuntu-latest'
+        # astral-sh/setup-uv only publishes floating major-version tags
+        # (v1..v7); v8/v9 exist solely as exact tags, so this is pinned to
+        # the latest exact release rather than a `v9`-style floating tag.
+        uses: astral-sh/setup-uv@v9.0.0
+
+      - name: Warm up zarr-python interop dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: uv run zarr-matlab/interop-tests/zarr_interop_cli.py --help
+
+      - name: Run zarr-python interop tests
+        if: matrix.os == 'ubuntu-latest'
+        uses: matlab-actions/run-tests@v2
+        with:
+          source-folder: zarr-matlab
+          select-by-folder: zarr-matlab/interop-tests
+
       - uses: actions/upload-artifact@v4
         with:
           name: mex-${{ matrix.os }}
