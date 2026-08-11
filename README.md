@@ -233,7 +233,9 @@ results = runtests('tests');
 
 Uses the Rust-based [zarrs](https://zarrs.dev) library for the Zarr IO. Developed by [Lachlan Deakin](https://github.com/LDeakin) and other contributors.
 
-Uses the Rust-MATLAB binding originally developed for the [WKW format](https://github.com/scalableminds/webknossos-wrap). Developed by Alessandro Motta at the [Max Planck Institute for Brain Research](https://brain.mpg.de/)
+Uses the Rust-MATLAB binding originally developed for the [WKW format](https://github.com/scalableminds/webknossos-wrap). Developed by [Alessandro Motta](https://github.com/amotta) at the [Max Planck Institute for Brain Research](https://brain.mpg.de/)
+
+Thanks to [Ilya Belevich](https://github.com/Ajaxels) for integration and performance testing. See [Microscopy Image Browser (MIB)](https://mib.helsinki.fi/).
 
 ## License
 MIT
