@@ -274,6 +274,11 @@ cd zarr-matlab
 results = runtests('tests');
 ```
 
+There is also a separate suite that round-trips zarr-matlab against a real
+`zarr-python` install (both directions, both Zarr versions). It requires
+[`uv`](https://docs.astral.sh/uv/) and is not run by `runtests('tests')` —
+see [`zarr-matlab/tests-interop/README.md`](zarr-matlab/tests-interop/README.md).
+
 ## Credits
 
 Uses the Rust-based [zarrs](https://zarrs.dev) library for the Zarr IO. Developed by [Lachlan Deakin](https://github.com/LDeakin) and other contributors.
