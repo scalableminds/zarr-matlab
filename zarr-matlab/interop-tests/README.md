@@ -12,7 +12,7 @@ hand-writing `.zarray` JSON — this suite actually invokes `zarr-python`.
 - It is **not** run by `runtests('tests')` and is **not** included in the
   packaged toolbox (`.mltbx`) or the release zip.
 - It is only exercised in CI on the `ubuntu-latest` leg.
-- Run it explicitly, locally, via `runtests('tests-interop')` (see below).
+- Run it explicitly, locally, via `runtests('interop-tests')` (see below).
 
 ## Setup
 
@@ -32,13 +32,13 @@ installation instructions — they do not skip silently.
 ```matlab
 cd zarr-matlab
 zarrBuild();  % if you haven't already
-results = runtests('tests-interop');
+results = runtests('interop-tests');
 ```
 
 Or just the CLI, standalone, for debugging:
 
 ```bash
-cd zarr-matlab/tests-interop
+cd zarr-matlab/interop-tests
 uv run zarr_interop_cli.py write-array --path /tmp/x --zarr-format 3 \
     --shape 12,9,5 --chunks 4,3,5 --dtype uint16 --compressor zstd
 uv run zarr_interop_cli.py check-array --path /tmp/x --zarr-format 3 \

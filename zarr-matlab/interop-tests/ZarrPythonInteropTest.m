@@ -4,7 +4,7 @@ classdef ZarrPythonInteropTest < matlab.unittest.TestCase
     %
     %   This suite requires `uv` (https://docs.astral.sh/uv/) on PATH. It is
     %   NOT part of `runtests('tests')` -- run it explicitly via
-    %   `runtests('tests-interop')`. See README.md in this directory.
+    %   `runtests('interop-tests')`. See README.md in this directory.
     %
     %   The core compressor/format matrix lives here as a parameterized test;
     %   one-off cases (separators, order, fill values, big-endian, sharding,
