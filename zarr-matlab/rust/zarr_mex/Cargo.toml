@@ -5,7 +5,11 @@ authors = ["Norman Rzepka <norman.rzepka@scalableminds.com>", "Alessandro Motta 
 build = "build.rs"
 
 [dependencies]
-zarrs = "0.23"
+# `zlib` and `bz2` are off by default in zarrs but are common numcodecs
+# compressors in real Zarr V2 data, so enable them alongside the defaults
+# (blosc, crc32c, gzip, sharding, transpose, zstd). `zlib` reuses the flate2
+# dependency that `gzip` already pulls in.
+zarrs = { version = "0.23", features = ["zlib", "bz2"] }
 libc = "0.2"
 serde_json = "1.0"
 zarrs_http = "0.3.1"

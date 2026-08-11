@@ -1,12 +1,13 @@
 # Zarr-MATLAB
-A Zarr v3 implementation based on [zarrs](https://zarrs.dev) for MATLAB.
+A Zarr v3 and v2 implementation based on [zarrs](https://zarrs.dev) for MATLAB.
 
 ## Features
 
-- Read and write Zarr v3 arrays
-- Support for chunking and sharding
+- Read and write Zarr v3 and Zarr v2 arrays
+- The format of an existing array or group is detected automatically on open
+- Support for chunking and sharding (sharding is v3 only)
 - Filter codecs: transpose (default)
-- Compression codecs: zstd (default), gzip, blosc
+- Compression codecs: zstd (default), gzip, blosc; v2 additionally supports zlib and bz2
 - Filesystem access (read-write) and HTTP/HTTPS remote access (read-only)
 - Group hierarchy support
 - Attributes for arrays and groups
@@ -61,6 +62,25 @@ arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
     'chunkKeyEncoding', struct('name', 'v2', 'separator', '.'));
 ```
 
+Create a Zarr v2 array instead of the default v3:
+
+```matlab
+% Writes .zarray (and .zattrs for attributes) instead of zarr.json
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
+    'chunkShape', [32, 32, 32], 'zarrFormat', 2);
+
+% v2 also accepts the zlib and bz2 numcodecs compressors
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
+    'zarrFormat', 2, 'compressors', 'zlib');
+
+% Chunk keys are flat in v2; only the separator is configurable
+arr = ZarrArray.create('/path/to/array', [100, 100, 100], 'uint16', ...
+    'zarrFormat', 2, 'chunkKeyEncoding', '.');
+
+% createFromData takes zarrFormat too
+arr = ZarrArray.createFromData('/path/to/array', data, 'zarrFormat', 2);
+```
+
 Create an array from existing data (shape and data type are inferred):
 
 ```matlab
@@ -83,7 +103,14 @@ arr = ZarrArray.createFromData('/path/to/mask', mask);
 Notes:
 - **Filters**: Applied before bytes codec. Default is `transpose` (to store Fortran-order data). Use `'none'` to disable.
 - **Compressors**: Applied after bytes codec. Default is `zstd`. Supported: `zstd`, `gzip`, `blosc`, or `'none'` to disable.
-- Both `filters` and `compressors` accept: a single codec (string or struct), a cell array of codecs (sequence), or `'none'`. 
+- Both `filters` and `compressors` accept: a single codec (string or struct), a cell array of codecs (sequence), or `'none'`.
+- **Zarr v2 differences** (`'zarrFormat', 2`):
+  - No sharding: passing `shardShape` is an error.
+  - A single compressor only: a cell array of more than one compressor is an error. `zlib` and `bz2` are available in addition to `zstd`, `gzip` and `blosc`, and `blosc` takes an integer `shuffle` (0 none, 1 byte-wise, 2 bit-wise) rather than the v3 string form.
+  - There is no `transpose` codec. `filters` selects the chunk byte layout instead: the default writes `order: "F"` to match MATLAB's column-major arrays, and `'none'` writes `order: "C"`. Either way reads and writes return the same MATLAB array.
+  - `chunkKeyEncoding` contributes only a separator, written as `dimension_separator`.
+  - Attributes live in `.zattrs` rather than inside the array metadata.
+
 Open an existing array and read/write data:
 
 ```matlab
@@ -91,8 +118,9 @@ Open an existing array and read/write data:
 arr = ZarrArray('/path/to/array');
 
 % Get array info
-info = arr.info();   % Returns struct with shape, dataType, chunkShape, shardShape
-shape = arr.shape(); % Returns shape as vector
+info = arr.info();     % Struct with shape, dataType, chunkShape, shardShape, zarrFormat
+shape = arr.shape();   % Returns shape as vector
+format = arr.zarrFormat(); % 2 or 3, detected from the metadata on disk
 
 % Read data (bounding box is [start, end] for each dimension, 1-indexed)
 bbox = [1, 33; 1, 33; 1, 33];  % Read a 32x32x32 region
@@ -146,11 +174,26 @@ names = root.list();                    % Returns {'raw', 'segmentation'}
 [groups, arrays] = root.listContents(); % Separate groups and arrays
 ```
 
+Create a Zarr v2 hierarchy:
+
+```matlab
+% Writes .zgroup instead of zarr.json
+root = ZarrGroup.create('/path/to/dataset', 'zarrFormat', 2);
+
+% Subgroups and arrays inherit the parent's format
+raw = root.createGroup('raw');            % also v2
+arr = raw.createArray('data', [512, 512, 128], 'uint8');  % also v2
+
+% Unless overridden explicitly
+v3arr = raw.createArray('other', [64, 64], 'uint16', 'zarrFormat', 3);
+```
+
 Open existing groups:
 
 ```matlab
-% Open existing group
+% Open existing group (v2 and v3 are both detected automatically)
 root = ZarrGroup('/path/to/dataset');
+format = root.zarrFormat();  % 2 or 3
 
 % Navigate to subgroups
 segmentation = root.openGroup('segmentation');
@@ -159,6 +202,8 @@ segmentation = root.openGroup('segmentation');
 arr = segmentation.openArray('data');
 data = arr.read([1, 65; 1, 65; 1, 65]);
 ```
+
+`list()` and `listContents()` recognise nodes in either format, so a hierarchy that mixes v2 and v3 children is listed correctly.
 
 ### Remote Access (HTTP)
 

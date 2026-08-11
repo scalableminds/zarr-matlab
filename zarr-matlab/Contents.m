@@ -1,11 +1,11 @@
 % ZARR-MATLAB
 % Version 0.0.1 23-Jan-2026
 %
-% Zarr v3 implementation for MATLAB based on zarrs.
+% Zarr v3 and v2 implementation for MATLAB based on zarrs.
 %
 % Classes:
-%   ZarrArray  - Read and write Zarr v3 arrays
-%   ZarrGroup  - Create and navigate Zarr v3 group hierarchies
+%   ZarrArray  - Read and write Zarr v3 and v2 arrays
+%   ZarrGroup  - Create and navigate Zarr v3 and v2 group hierarchies
 %   ZarrNode   - Base class for arrays and groups (provides attribute methods)
 %
 %

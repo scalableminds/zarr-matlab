@@ -1,15 +1,32 @@
 classdef ZarrGroup < ZarrNode
-    % ZARRGROUP Zarr v3 group for organizing arrays and subgroups
+    % ZARRGROUP Zarr group for organizing arrays and subgroups
     %   A ZarrGroup represents a node in the Zarr hierarchy that can contain
-    %   arrays and other groups.
+    %   arrays and other groups. Existing groups are opened in either Zarr v3
+    %   or v2 format, detected from the metadata on disk. New groups default to
+    %   v3; pass 'zarrFormat', 2 to create v2 groups.
+
+    properties (Access = private)
+        % Zarr format version of this group on disk (2 or 3), detected when the
+        % group is opened. Child groups and arrays created through this group
+        % inherit it by default. Read it via zarrFormat().
+        format
+    end
 
     methods (Static)
-        function grp = create(path)
+        function grp = create(path, varargin)
             % CREATE Create a new Zarr group
             %   grp = ZarrGroup.create(path)
+            %   grp = ZarrGroup.create(path, 'zarrFormat', 2)
             %
             %   Arguments:
             %     path - Path where the group will be created
+            %
+            %   Optional Name-Value Arguments:
+            %     zarrFormat - Zarr format version to create: 2 or 3 (default: 3)
+
+            p = inputParser;
+            addParameter(p, 'zarrFormat', 3, @(x) isnumeric(x) && isscalar(x) && ismember(x, [2, 3]));
+            parse(p, varargin{:});
 
             if ZarrNode.isHttpUrl(path)
                 error('zarr:error', 'Cannot create groups at HTTP URLs');
@@ -21,18 +38,15 @@ classdef ZarrGroup < ZarrNode
 
             mkdir(path);
 
-            metadata = struct( ...
-                'zarr_format', 3, ...
-                'node_type', 'group' ...
-            );
-
-            jsonPath = fullfile(path, 'zarr.json');
-            fid = fopen(jsonPath, 'w');
-            if fid == -1
-                error('zarr:error', 'Failed to create zarr.json at %s', path);
+            if p.Results.zarrFormat == 2
+                % Zarr v2 groups are a bare .zgroup; attributes live in .zattrs.
+                ZarrNode.writeJsonFile(path, '.zgroup', struct('zarr_format', 2));
+            else
+                ZarrNode.writeJsonFile(path, 'zarr.json', struct( ...
+                    'zarr_format', 3, ...
+                    'node_type', 'group' ...
+                    ));
             end
-            fprintf(fid, '%s', jsonencode(metadata));
-            fclose(fid);
 
             grp = ZarrGroup(path);
         end
@@ -46,13 +60,21 @@ classdef ZarrGroup < ZarrNode
             %   Arguments:
             %     path - Path to the existing Zarr group (local path or HTTP URL)
 
-            metadata = ZarrNode.fetchMetadata(path);
+            [~, zarrFormat, nodeType] = ZarrNode.fetchNodeMetadata(path);
 
-            if ~isfield(metadata, 'node_type') || ~strcmp(metadata.node_type, 'group')
-                error('zarr:error', 'Path ''%s'' is not a Zarr group (node_type is not ''group'').', path);
+            if ~strcmp(nodeType, 'group')
+                error('zarr:error', 'Path ''%s'' is not a Zarr group.', path);
             end
 
             obj.path = path;
+            obj.format = zarrFormat;
+        end
+
+        function format = zarrFormat(obj)
+            % ZARRFORMAT Get the Zarr format version of the group (2 or 3)
+            %   format = grp.zarrFormat()
+
+            format = obj.format;
         end
 
         function grp = openGroup(obj, name)
@@ -69,12 +91,17 @@ classdef ZarrGroup < ZarrNode
             grp = ZarrGroup(subpath);
         end
 
-        function grp = createGroup(obj, name)
+        function grp = createGroup(obj, name, varargin)
             % CREATEGROUP Create a new subgroup within this group
             %   subgrp = grp.createGroup(name)
+            %   subgrp = grp.createGroup(name, 'zarrFormat', 2)
             %
             %   Arguments:
             %     name - Name of the subgroup to create
+            %
+            %   Optional Name-Value Arguments:
+            %     zarrFormat - Zarr format version to create: 2 or 3
+            %                  Default: this group's own format
             %
             %   Returns:
             %     subgrp - ZarrGroup object for the new subgroup
@@ -84,7 +111,8 @@ classdef ZarrGroup < ZarrNode
             end
 
             subpath = fullfile(obj.path, name);
-            grp = ZarrGroup.create(subpath);
+            args = obj.withInheritedFormat(varargin);
+            grp = ZarrGroup.create(subpath, args{:});
         end
 
         function arr = openArray(obj, name)
@@ -120,6 +148,8 @@ classdef ZarrGroup < ZarrNode
             %     fillValue   - Fill value for uninitialized chunks
             %                   (default: false for bool, 0 for numeric types)
             %     chunkKeyEncoding - Chunk key encoding ('/' or '.' or struct)
+            %     zarrFormat  - Zarr format version to create: 2 or 3
+            %                   Default: this group's own format
             %
             %   Returns:
             %     arr - ZarrArray object for the new array
@@ -129,7 +159,8 @@ classdef ZarrGroup < ZarrNode
             end
 
             subpath = fullfile(obj.path, name);
-            arr = ZarrArray.create(subpath, shape, dataType, varargin{:});
+            args = obj.withInheritedFormat(varargin);
+            arr = ZarrArray.create(subpath, shape, dataType, args{:});
         end
 
         function arr = createArrayFromData(obj, name, data, varargin)
@@ -150,6 +181,8 @@ classdef ZarrGroup < ZarrNode
             %     fillValue   - Fill value for uninitialized chunks
             %                   (default: false for bool, 0 for numeric types)
             %     chunkKeyEncoding - Chunk key encoding ('/' or '.' or struct)
+            %     zarrFormat  - Zarr format version to create: 2 or 3
+            %                   Default: this group's own format
             %
             %   Returns:
             %     arr - ZarrArray object for the new array
@@ -159,7 +192,8 @@ classdef ZarrGroup < ZarrNode
             end
 
             subpath = fullfile(obj.path, name);
-            arr = ZarrArray.createFromData(subpath, data, varargin{:});
+            args = obj.withInheritedFormat(varargin);
+            arr = ZarrArray.createFromData(subpath, data, args{:});
         end
 
         function names = list(obj)
@@ -180,9 +214,9 @@ classdef ZarrGroup < ZarrNode
             for i = 1:numel(items)
                 item = items(i);
                 if item.isdir && ~strcmp(item.name, '.') && ~strcmp(item.name, '..')
-                    % Check if it has a zarr.json (valid zarr node)
-                    jsonPath = fullfile(obj.path, item.name, 'zarr.json');
-                    if isfile(jsonPath)
+                    % Keep directories that are Zarr nodes in either format
+                    nodeType = ZarrNode.detectNodeType(fullfile(obj.path, item.name));
+                    if ~isempty(nodeType)
                         names{end + 1} = item.name; %#ok<AGROW>
                     end
                 end
@@ -209,18 +243,29 @@ classdef ZarrGroup < ZarrNode
             for i = 1:numel(items)
                 item = items(i);
                 if item.isdir && ~strcmp(item.name, '.') && ~strcmp(item.name, '..')
-                    jsonPath = fullfile(obj.path, item.name, 'zarr.json');
-                    if isfile(jsonPath)
-                        metadata = jsondecode(fileread(jsonPath));
-                        if isfield(metadata, 'node_type')
-                            if strcmp(metadata.node_type, 'group')
-                                groups{end + 1} = item.name; %#ok<AGROW>
-                            elseif strcmp(metadata.node_type, 'array')
-                                arrays{end + 1} = item.name; %#ok<AGROW>
-                            end
-                        end
+                    nodeType = ZarrNode.detectNodeType(fullfile(obj.path, item.name));
+                    if strcmp(nodeType, 'group')
+                        groups{end + 1} = item.name; %#ok<AGROW>
+                    elseif strcmp(nodeType, 'array')
+                        arrays{end + 1} = item.name; %#ok<AGROW>
                     end
                 end
+            end
+        end
+    end
+
+    methods (Access = private)
+        function args = withInheritedFormat(obj, args)
+            % WITHINHERITEDFORMAT Default a child's zarrFormat to this group's
+            %   Children of a v2 group are created as v2 unless the caller passes
+            %   an explicit 'zarrFormat', which always wins. The name is matched
+            %   the way inputParser would (case-insensitively, allowing a partial
+            %   name), so appending our own copy can never collide with theirs.
+
+            isFormatName = @(a) (ischar(a) || isstring(a)) && ~isempty(char(a)) ...
+                && startsWith('zarrformat', lower(char(a)));
+            if ~any(cellfun(isFormatName, args))
+                args = [args, {'zarrFormat', obj.format}];
             end
         end
     end

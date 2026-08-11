@@ -32,7 +32,7 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
 
     // Gather the plain metadata under the (possibly cached) array's lock, then
     // build the MATLAB struct once the lock is released.
-    let (shape, data_type_str, shard_shape, inner_chunk_shape) = arg.with(|array| {
+    let (shape, data_type_str, shard_shape, inner_chunk_shape, zarr_format) = arg.with(|array| {
         let shape = array.shape().to_vec();
         let ndim = shape.len();
 
@@ -47,28 +47,38 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
         let chunk_origin: Vec<u64> = vec![0; ndim];
         let shard_shape = array.chunk_shape_vec(&chunk_origin)?;
 
-        // Inner chunk shape (from sharding codec if present, otherwise none)
-        let inner_chunk_shape: Option<Vec<u64>> = match array.metadata() {
-            zarrs::array::ArrayMetadata::V3(metadata) => metadata.codecs.iter().find_map(|codec| {
-                if codec.name() == "sharding_indexed" {
-                    codec
-                        .configuration()
-                        .and_then(|configuration| configuration.get("chunk_shape"))
-                        .and_then(|inner_chunk_shape| inner_chunk_shape.as_array())
-                        .map(|inner_chunk_shape| {
-                            inner_chunk_shape
-                                .iter()
-                                .map(|d| d.as_u64().unwrap())
-                                .collect()
-                        })
-                } else {
-                    None
-                }
-            }),
-            _ => None,
+        // Inner chunk shape (from sharding codec if present, otherwise none).
+        // Zarr V2 has no sharding, so it never has an inner chunk shape.
+        let (inner_chunk_shape, zarr_format): (Option<Vec<u64>>, u64) = match array.metadata() {
+            zarrs::array::ArrayMetadata::V3(metadata) => {
+                let inner_chunk_shape = metadata.codecs.iter().find_map(|codec| {
+                    if codec.name() == "sharding_indexed" {
+                        codec
+                            .configuration()
+                            .and_then(|configuration| configuration.get("chunk_shape"))
+                            .and_then(|inner_chunk_shape| inner_chunk_shape.as_array())
+                            .map(|inner_chunk_shape| {
+                                inner_chunk_shape
+                                    .iter()
+                                    .map(|d| d.as_u64().unwrap())
+                                    .collect()
+                            })
+                    } else {
+                        None
+                    }
+                });
+                (inner_chunk_shape, 3)
+            }
+            zarrs::array::ArrayMetadata::V2(_) => (None, 2),
         };
 
-        Ok::<_, String>((shape, data_type_str, shard_shape, inner_chunk_shape))
+        Ok::<_, String>((
+            shape,
+            data_type_str,
+            shard_shape,
+            inner_chunk_shape,
+            zarr_format,
+        ))
     })?;
 
     // Create the shape vector
@@ -77,20 +87,24 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
     let data_type_cstr = CString::new(data_type_str).unwrap();
     let data_type_arr = unsafe { mxCreateString(data_type_cstr.as_ptr()) };
 
+    let zarr_format_arr = create_double_vector(&[zarr_format])?;
+
     // Create field names
     let field_shape = CString::new("shape").unwrap();
     let field_dtype = CString::new("dataType").unwrap();
     let field_chunk = CString::new("chunkShape").unwrap();
     let field_shard = CString::new("shardShape").unwrap();
+    let field_format = CString::new("zarrFormat").unwrap();
 
-    let field_names: [*const c_char; 4] = [
+    let field_names: [*const c_char; 5] = [
         field_shape.as_ptr(),
         field_dtype.as_ptr(),
         field_chunk.as_ptr(),
         field_shard.as_ptr(),
+        field_format.as_ptr(),
     ];
 
-    let result_struct = unsafe { mxCreateStructMatrix(1, 1, 4, field_names.as_ptr()) };
+    let result_struct = unsafe { mxCreateStructMatrix(1, 1, 5, field_names.as_ptr()) };
     if result_struct.is_null() {
         return Err("Failed to create output struct".to_string());
     }
@@ -99,6 +113,7 @@ pub(crate) fn info(rhs: &[MxArray]) -> Result<MxArrayMut> {
     unsafe {
         mxSetField(result_struct, 0, field_shape.as_ptr(), shape_arr);
         mxSetField(result_struct, 0, field_dtype.as_ptr(), data_type_arr);
+        mxSetField(result_struct, 0, field_format.as_ptr(), zarr_format_arr);
 
         match inner_chunk_shape {
             Some(inner_chunk_shape) => {
