@@ -46,7 +46,10 @@ jobs:
       # that the other 3 legs don't have -- see zarr-matlab/tests-interop/README.md.
       - name: Setup uv (interop tests)
         if: matrix.os == 'ubuntu-latest'
-        uses: astral-sh/setup-uv@v9
+        # astral-sh/setup-uv only publishes floating major-version tags
+        # (v1..v7); v8/v9 exist solely as exact tags, so this is pinned to
+        # the latest exact release rather than a `v9`-style floating tag.
+        uses: astral-sh/setup-uv@v9.0.0
 
       - name: Warm up zarr-python interop dependencies
         if: matrix.os == 'ubuntu-latest'
