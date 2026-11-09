@@ -231,6 +231,29 @@ classdef ZarrMexTest < matlab.unittest.TestCase
 
             testCase.verifyError(@() zarrMex('info', nonExistentPath), 'zarr:error');
         end
+
+        function testMexStaysLoadedAfterClear(testCase)
+            % rayon/tokio worker threads stay parked inside zarrMex after a
+            % call returns. If MATLAB unloads the library (`clear mex` or
+            % exit), a worker that wakes up runs unmapped code and crashes
+            % MATLAB. zarrMex therefore locks itself on the first call.
+            arrayPath = fullfile(testCase.TempDir, 'lock_test');
+            json = testCase.createTestMetadataJson([64, 64, 64], 'uint32', [16, 16, 16]);
+            zarrMex('create', arrayPath, json);
+            data = uint32(reshape(1:64^3, [64, 64, 64]));
+            bbox = [1, 65; 1, 65; 1, 65];
+            zarrMex('write', arrayPath, bbox, data);
+
+            testCase.verifyTrue(mislocked('zarrMex'));
+
+            clear mex; %#ok<CLMEX>
+            testCase.verifyTrue(mislocked('zarrMex'));
+            [~, loadedMex] = inmem();
+            testCase.verifyTrue(any(strcmp(loadedMex, 'zarrMex')));
+
+            % the library (and its thread pools) must keep working
+            testCase.verifyEqual(zarrMex('read', arrayPath, bbox), data);
+        end
     end
 
     methods (Static, Access = private)

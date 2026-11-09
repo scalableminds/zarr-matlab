@@ -97,6 +97,7 @@ extern "C-unwind" {
 #[cfg_attr(target_os = "windows", link(name = "libmex", kind = "dylib"))]
 extern "C-unwind" {
     pub fn mexErrMsgIdAndTxt(errorid: *const c_char, errormsg: *const c_char) -> ();
+    pub fn mexLock() -> ();
     pub fn mexCallMATLAB(
         nlhs: c_int,
         plhs: *mut MxArrayMut,
