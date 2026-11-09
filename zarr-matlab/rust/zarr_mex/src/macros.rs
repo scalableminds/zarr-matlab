@@ -45,6 +45,11 @@ pub extern "C-unwind" fn mexFunction(
     nlhs: c_int, plhs: *mut MxArrayMut,
     nrhs: c_int, prhs: *const MxArray
 ) {
+    // rayon/tokio worker threads live inside this library after a call returns, so MATLAB must
+    // never unload it (at exit or on `clear mex`): a worker that wakes up would run unmapped code
+    static LOCK: ::std::sync::Once = ::std::sync::Once::new();
+    LOCK.call_once(|| unsafe { mexLock() });
+
     fn body(
         $_nlhs: c_int, $_plhs: *mut MxArrayMut,
         $_nrhs: c_int, $_prhs: *const MxArray) -> Result<()> $_body
