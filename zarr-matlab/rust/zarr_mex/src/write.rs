@@ -22,7 +22,8 @@ pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
         let ndim = array_shape.len();
         let data_type = array.data_type();
         let type_size = data_type
-            .fixed_size()
+            .as_fixed()
+            .map(|fixed| fixed.size())
             .ok_or_else(|| format!("Unsupported data type {:?} in Zarr array.", data_type))?;
 
         // build shape: no bbox arg means "write at origin", with the region taken
@@ -50,10 +51,20 @@ pub(crate) fn write(rhs: &[MxArray]) -> Result<()> {
             ));
         }
 
-        let data_bytes = copy_as_c_order(data_arr, &bbox.shape, type_size)?;
+        let data_bytes = mx_array_to_u8_slice(data_arr)?;
+        let expected_len = bbox.shape.iter().product::<u64>() as usize * type_size;
+        if data_bytes.len() != expected_len {
+            return Err(format!(
+                "Length of input array does not match expected size {} != {}",
+                data_bytes.len(),
+                expected_len,
+            ));
+        }
 
-        // write data (wrap raw bytes so they are stored as-is, not reinterpreted as
-        // typed `u8` elements)
+        // write data straight from the MATLAB buffer: the array is opened in
+        // column-major element order, so zarrs gathers each chunk from it
+        // directly (wrap raw bytes so they are stored as-is, not reinterpreted
+        // as typed `u8` elements)
         array.store_array_subset(&subset, ArrayBytes::new_flen(data_bytes))
     })
 }
