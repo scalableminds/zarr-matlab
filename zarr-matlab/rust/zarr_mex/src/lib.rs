@@ -1,9 +1,12 @@
 extern crate libc;
-extern crate rayon;
+extern crate unsafe_cell_slice;
 extern crate zarrs;
+extern crate zarrs_http;
+extern crate zarrs_storage_04;
 
 mod create;
 mod ffi;
+mod http;
 mod info;
 mod macros;
 mod read;

@@ -1,4 +1,4 @@
-use zarrs::array::{Array, ArrayMetadata, ArrayMetadataOptions, ArrayMetadataV2, ArrayMetadataV3};
+use zarrs::array::{Array, ArrayMetadata, ArrayMetadataV2, ArrayMetadataV3};
 
 use crate::ffi::*;
 use crate::util::*;
@@ -18,7 +18,7 @@ pub(crate) fn create(rhs: &[MxArray]) -> Result<()> {
     let json = mx_array_to_str(json_str)?;
 
     // Parse the JSON as either Zarr V3 or Zarr V2 array metadata, dispatching on
-    // `zarr_format`. `store_metadata_opt` below then writes `zarr.json` or
+    // `zarr_format`. `store_metadata` below then writes `zarr.json` or
     // `.zarray`/`.zattrs` accordingly, since the default `ArrayMetadataOptions`
     // leave the metadata version unconverted.
     let value: serde_json::Value = serde_json::from_str(json)
@@ -44,18 +44,14 @@ pub(crate) fn create(rhs: &[MxArray]) -> Result<()> {
     let store = create_writable_store(path)?;
 
     // Create the array with the provided metadata
-    let array = zarrs_result_to_str_error(
+    let mut array = zarrs_result_to_str_error(
         Array::new_with_metadata(store, "/", metadata),
         "Error while creating array",
     )?;
+    configure_for_matlab(&mut array);
 
     // Store the metadata to disk
-    zarrs_result_to_str_error(
-        array.store_metadata_opt(
-            &ArrayMetadataOptions::default().with_include_zarrs_metadata(false),
-        ),
-        "Error while writing array metadata",
-    )?;
+    zarrs_result_to_str_error(array.store_metadata(), "Error while writing array metadata")?;
 
     Ok(())
 }
