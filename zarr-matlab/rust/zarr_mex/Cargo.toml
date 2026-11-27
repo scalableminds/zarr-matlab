@@ -9,11 +9,19 @@ build = "build.rs"
 # compressors in real Zarr V2 data, so enable them alongside the defaults
 # (blosc, crc32c, gzip, sharding, transpose, zstd). `zlib` reuses the flate2
 # dependency that `gzip` already pulls in.
-zarrs = { version = "0.23", features = ["zlib", "bz2"] }
+#
+# Pinned to an unreleased zarrs (0.24.0-dev) for array-level `ElementOrder::F`
+# (zarrs/zarrs#520), which lets zarrs read into and write from MATLAB's
+# column-major buffers directly. Switch back to a crates.io release once 0.24
+# is out.
+zarrs = { git = "https://github.com/zarrs/zarrs", rev = "97b04dcd522778a122602c45456930616ab57489", features = ["zlib", "bz2"] }
 libc = "0.2"
 serde_json = "1.0"
+unsafe_cell_slice = "0.2.4"
+# `zarrs_http` 0.3 still implements the `zarrs_storage` 0.4 traits; `http.rs`
+# adapts it to the 0.5 traits used by zarrs 0.24.
 zarrs_http = "0.3.1"
-rayon = "1"
+zarrs_storage_04 = { package = "zarrs_storage", version = "0.4" }
 
 [profile.release]
 lto = true

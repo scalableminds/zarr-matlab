@@ -1,4 +1,5 @@
-use zarrs::array::ArrayBytes;
+use unsafe_cell_slice::UnsafeCellSlice;
+use zarrs::array::{ArrayBytesDecodeIntoTarget, ArrayBytesFixedDisjointView};
 
 use crate::ffi::*;
 use crate::util::*;
@@ -20,7 +21,8 @@ pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
         let ndim = array_shape.len();
         let data_type = array.data_type();
         let type_size = data_type
-            .fixed_size()
+            .as_fixed()
+            .map(|fixed| fixed.size())
             .ok_or_else(|| format!("Unsupported data type {:?} in Zarr array.", data_type))?;
 
         // build shape: no bbox arg means "read the whole array"
@@ -35,18 +37,26 @@ pub(crate) fn read(rhs: &[MxArray]) -> Result<MxArrayMut> {
         // prepare allocation
         let mat_class = zarrs_data_type_to_mx(array.data_type())?;
 
-        // read data
-        let data_all: ArrayBytes = array.retrieve_array_subset(&subset)?;
-        // Borrow the decoded bytes (in c-order) directly instead of cloning them;
-        // the transpose reads straight from this buffer into the MATLAB array.
-        let zarr_buf = zarrs_result_to_str_error(
-            data_all.into_fixed(),
-            "Error while reading read data into buffer",
-        )?; // Cow<[u8]>, in c-order
-
         let mat_arr = create_numeric_array(&bbox.shape, mat_class, MxComplexity::Real)?;
 
-        copy_as_fortran_order(&zarr_buf, mat_arr, &bbox.shape, type_size)?;
+        // Decode straight into the MATLAB array through a column-major view of
+        // its buffer, so zarrs places each element at its F-order position and
+        // no intermediate C-order buffer or transpose is needed.
+        let mat_buf = mx_array_mut_to_u8_slice_mut(mat_arr)?;
+        let f_strides = f_strides_of(&bbox.shape);
+        // SAFETY: this is the only view of `mat_buf`, and distinct indices of a
+        // dense column-major layout address distinct elements.
+        let view = unsafe {
+            ArrayBytesFixedDisjointView::new_strided(
+                UnsafeCellSlice::new(mat_buf),
+                type_size,
+                0,
+                &bbox.shape,
+                &f_strides,
+            )
+        };
+        let view = zarrs_result_to_str_error(view, "Error while creating output view")?;
+        array.retrieve_array_subset_into(&subset, &mut ArrayBytesDecodeIntoTarget::Fixed(view))?;
 
         Ok(mat_arr)
     })
